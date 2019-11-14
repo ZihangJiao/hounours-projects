@@ -1,0 +1,9 @@
+{
+    "cSpell.enabledLanguageIds": [
+        "latex",
+        "markdown",
+        "plaintext"
+    ],
+    "python.dataScience.ignoreVscodeTheme": true,
+    "python.pythonPath": "/anaconda3/envs/fyp/bin/python"
+}
