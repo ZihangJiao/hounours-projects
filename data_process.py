@@ -213,24 +213,24 @@ def seq2seq_preprocess(transcript_path: str, motion_path: str,
 
     return inputs, targets
 
-def make_different_datasets(paired_file_paths: list):
-    Dictionary_e = defaultdict(dict)
-    Dictionary_i = defaultdict(dict)
-    Dictionary_n = defaultdict(dict)
-    for pair in paired_file_paths:
-        if pair[0][-1] == 'e':
-            Dictionary_e[pair[1]] = pair[2]
-        elif pair[0][-1] == 'i':
-            Dictionary_i[pair[1]] = pair[2]
-        elif pair[0][-1] == 'n':
-            Dictionary_n[pair[1]] = pair[2]
-
-    with open('e.dic', 'w') as fp:
-        json.dump(Dictionary_e, fp)
-    with open('i.dic', 'w') as fp:
-        json.dump(Dictionary_i, fp)
-    with open('n.dic', 'w') as fp:
-        json.dump(Dictionary_n, fp)
+# def make_different_datasets(paired_file_paths: list):
+#     Dictionary_e = defaultdict(dict)
+#     Dictionary_i = defaultdict(dict)
+#     Dictionary_n = defaultdict(dict)
+#     for pair in paired_file_paths:
+#         if pair[0][-1] == 'e':
+#             Dictionary_e[pair[1]] = pair[2]
+#         elif pair[0][-1] == 'i':
+#             Dictionary_i[pair[1]] = pair[2]
+#         elif pair[0][-1] == 'n':
+#             Dictionary_n[pair[1]] = pair[2]
+#
+#     with open('e.dic', 'w') as fp:
+#         json.dump(Dictionary_e, fp)
+#     with open('i.dic', 'w') as fp:
+#         json.dump(Dictionary_i, fp)
+#     with open('n.dic', 'w') as fp:
+#         json.dump(Dictionary_n, fp)
 #%%
 def make_dataset(process_function, paired_file_paths: list, ptype: str,
                  save_path: str) -> None:
@@ -296,25 +296,25 @@ data_path_motion = the_path + '/Recordings_October_2014/DOF-hiroshi/'
 data_path_text = the_path + '/Recordings_October_2014/Transcriptions/transcriptions_phrase_tables/'
 
 paired_file_paths = pair_files(data_path_text, '.TABLE', data_path_motion,
-                                '.axa')
+                                '.qtn')
 word2idx = load_encode('encode_dict.txt')
 
-make_different_datasets(paired_file_paths)
+# make_different_datasets(paired_file_paths)
 
 
 
-for personality in ['e','i','n']:
-    with open(personality + ".dic") as F:
-            personality_dic = json.loads(F.read())
-    personality_keys = list(personality_dic.keys())
-    train_size = int(0.8 * len(personality_keys))
-    valid_size = int(0.1 * len(personality_keys))
-    test_size = len(personality_keys) - train_size - valid_size
-
-    random.shuffle(personality_keys)
-    train_data = personality_keys[:train_size]
-    valid_data = personality_keys[train_size:(train_size + valid_size)]
-    test_data = personality_keys[(train_size + valid_size ):]
+# for personality in ['e','i','n']:
+#     with open(personality + ".dic") as F:
+#             personality_dic = json.loads(F.read())
+#     personality_keys = list(personality_dic.keys())
+#     train_size = int(0.8 * len(personality_keys))
+#     valid_size = int(0.1 * len(personality_keys))
+#     test_size = len(personality_keys) - train_size - valid_size
+#
+#     random.shuffle(personality_keys)
+#     train_data = personality_keys[:train_size]
+#     valid_data = personality_keys[train_size:(train_size + valid_size)]
+#     test_data = personality_keys[(train_size + valid_size ):]
     # train_set, valid_set, test_set = random_split(e_keys, [train_size, valid_size, test_size])
     # print(e_keys)
 
@@ -326,30 +326,30 @@ for personality in ['e','i','n']:
 
 
     # print(paired_file_paths)
-    personality_train_list= [x for x in paired_file_paths if x[1] in train_data]
-    personality_valid_list= [x for x in paired_file_paths if x[1] in valid_data]
-    personality_test_list= [x for x in paired_file_paths if x[1] in test_data]
-
-    # make three kinds of dataset
-    make_dataset(seq2seq_preprocess, personality_train_list, personality,
-                    './train_valid_test_data/'+ personality +'_seq2seq_dataset_train.npz')
-    print(personality + ' training data finished')
-    make_dataset(seq2seq_preprocess, personality_valid_list, personality,
-                    './train_valid_test_data/'+ personality +'_seq2seq_dataset_valid.npz')
-    print(personality + ' validation data finished')
-    make_dataset(seq2seq_preprocess, personality_test_list, personality,
-                    './train_valid_test_data/'+ personality +'_seq2seq_dataset_test.npz')
-    print(personality + ' test data finished')
+    # personality_train_list= [x for x in paired_file_paths if x[1] in train_data]
+    # personality_valid_list= [x for x in paired_file_paths if x[1] in valid_data]
+    # personality_test_list= [x for x in paired_file_paths if x[1] in test_data]
+    #
+    # # make three kinds of dataset
+    # make_dataset(seq2seq_preprocess, personality_train_list, personality,
+    #                 './train_valid_test_data/'+ personality +'_seq2seq_dataset_train.npz')
+    # print(personality + ' training data finished')
+    # make_dataset(seq2seq_preprocess, personality_valid_list, personality,
+    #                 './train_valid_test_data/'+ personality +'_seq2seq_dataset_valid.npz')
+    # print(personality + ' validation data finished')
+    # make_dataset(seq2seq_preprocess, personality_test_list, personality,
+    #                 './train_valid_test_data/'+ personality +'_seq2seq_dataset_test.npz')
+    # print(personality + ' test data finished')
 
 
 
 # make three kinds of dataset
-# make_dataset(seq2seq_preprocess, paired_file_paths, 'e',
-#                 './data/extro_seq2seq_dataset.npz')
-# print('extroverted data finished')
-# make_dataset(seq2seq_preprocess, paired_file_paths, 'i',
-#                 './data/intro_seq2seq_dataset.npz')
-# print('introverted data finished')
-# make_dataset(seq2seq_preprocess, paired_file_paths, 'n',
-#                 './data/natural_seq2seq_dataset.npz')
-# print('natural data finished')
+make_dataset(seq2seq_preprocess, paired_file_paths, 'e',
+                './data/extro_seq2seq_dataset.npz')
+print('extroverted data finished')
+make_dataset(seq2seq_preprocess, paired_file_paths, 'i',
+                './data/intro_seq2seq_dataset.npz')
+print('introverted data finished')
+make_dataset(seq2seq_preprocess, paired_file_paths, 'n',
+                './data/natural_seq2seq_dataset.npz')
+print('natural data finished')

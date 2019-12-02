@@ -31,16 +31,17 @@ torch.manual_seed(seed)
 batch_size = 11
 
 
-personality = 'e'
-
-train_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_train.npz'
-valid_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_valid.npz'
-test_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_test.npz'
-# data_path = './data/extro_seq2seq_dataset.npz'
-word2idx = load_encode('encode_dict.txt')  # load word map
+# personality = 'e'
 #
-# data_path = './data/extro_seq2seq_dataset.npz'
-# word2idx = load_encode('encode_dict.txt')  # load word map
+# train_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_train.npz'
+# valid_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_valid.npz'
+# test_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_test.npz'
+
+extro_data_path = './data/extro_seq2seq_dataset.npz'
+intro_data_path = './data/intro_seq2seq_dataset.npz'
+natural_data_path = './data/natural_seq2seq_dataset.npz'
+word2idx = load_encode('encode_dict.txt')  # load word map
+
 idx2word = {v: k for k, v in word2idx.items()}
 
 
@@ -53,10 +54,14 @@ idx2word = {v: k for k, v in word2idx.items()}
 # train_set, valid_set, test_set = random_split(
 #     seq2seq_dataset, [train_size, valid_size, test_size])
 
-train_set = Seq2SeqDataset(train_data_path, word2idx)
-valid_set = Seq2SeqDataset(valid_data_path, word2idx)
-test_set = Seq2SeqDataset(test_data_path, word2idx)
+extro_set = Seq2SeqDataset(extro_data_path, word2idx)
+intro_set = Seq2SeqDataset(intro_data_path, word2idx)
+natural_set = Seq2SeqDataset(natural_data_path, word2idx)
 
+train_set = extro_set
+valid_set = extro_set
+test_set = extro_set
+print (extro_set[0][1])
 train_dataloader = DataLoader(train_set,
                               batch_size=1,
                               shuffle=True,
@@ -175,52 +180,52 @@ target_arr = np.array([i.numpy() for i in target_list])
 #         the_sum = 0.0
         # print("here" + str(output_arr[a][b]))
 
-print(target_arr)
 
-imaginary = []
-real1 = []
-real2 = []
-real3 = []
-
-target_imaginary = []
-target_real1 = []
-target_real2 = []
-target_real3 = []
-# for i in range(len(output_arr)):
-i = 0
-for k in range(len(output_arr[i])):
-    imaginary.append(output_arr[i][k][0])
-    target_imaginary.append(target_arr[i][k][0])
-
-    real1.append(output_arr[i][k][1])
-    target_real1.append(target_arr[i][k][1])
-
-    real2.append(output_arr[i][k][2])
-    target_real2.append(target_arr[i][k][2])
-
-    real3.append(output_arr[i][k][3])
-    target_real3.append(target_arr[i][k][3])
-fig, axs = plt.subplots(2,2)
-axs[0,0].plot(imaginary)
-axs[0,0].plot(target_imaginary)
-# axs[0,0].legend('real_imaginary','target_imaginary')
-
-
-axs[0,1].plot(real1)
-axs[0,1].plot(target_real1)
-# axs[0,1].legend('real1','target_real1')
-
-
-axs[1,0].plot(real2)
-axs[1,0].plot(target_real2)
-# axs[1,0].legend('real2','target_real2')
-
-axs[1,1].plot(real3)
-axs[1,1].plot(target_real3)
-# axs[1,1].legend('real3','target_real3')
-
-
-plt.savefig('./performance')
+#
+# imaginary = []
+# real1 = []
+# real2 = []
+# real3 = []
+#
+# target_imaginary = []
+# target_real1 = []
+# target_real2 = []
+# target_real3 = []
+# # for i in range(len(output_arr)):
+# i = 0
+# for k in range(len(output_arr[i])):
+#     imaginary.append(output_arr[i][k][0])
+#     target_imaginary.append(target_arr[i][k][0])
+#
+#     real1.append(output_arr[i][k][1])
+#     target_real1.append(target_arr[i][k][1])
+#
+#     real2.append(output_arr[i][k][2])
+#     target_real2.append(target_arr[i][k][2])
+#
+#     real3.append(output_arr[i][k][3])
+#     target_real3.append(target_arr[i][k][3])
+# fig, axs = plt.subplots(2,2)
+# axs[0,0].plot(imaginary)
+# axs[0,0].plot(target_imaginary)
+# # axs[0,0].legend('real_imaginary','target_imaginary')
+#
+#
+# axs[0,1].plot(real1)
+# axs[0,1].plot(target_real1)
+# # axs[0,1].legend('real1','target_real1')
+#
+#
+# axs[1,0].plot(real2)
+# axs[1,0].plot(target_real2)
+# # axs[1,0].legend('real2','target_real2')
+#
+# axs[1,1].plot(real3)
+# axs[1,1].plot(target_real3)
+# # axs[1,1].legend('real3','target_real3')
+#
+#
+# plt.savefig('./performance')
 
 # print("target"+str(output_arr))
 

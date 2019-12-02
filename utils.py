@@ -156,7 +156,7 @@ def pair_files(folder_path_text: str, text_suffix: str,
         for name in shared_names
         if (name in transcript_file_dict) and (name in motion_file_dict)
     ]
-    # print((paired_file_paths))
+    print((paired_file_paths))
 
     return paired_file_paths
 

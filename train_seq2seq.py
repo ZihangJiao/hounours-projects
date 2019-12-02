@@ -21,11 +21,14 @@ torch.manual_seed(seed) # fix a seed for reproduce
 # dataset setting
 batch_size = 50
 
-personality = 'e'
-
-train_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_train.npz'
-valid_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_valid.npz'
-test_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_test.npz'
+# personality = 'e'
+#
+# train_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_train.npz'
+# valid_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_valid.npz'
+# test_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_test.npz'
+extro_data_path = './data/extro_seq2seq_dataset.npz'
+intro_data_path = './data/intro_seq2seq_dataset.npz'
+natural_data_path = './data/natural_seq2seq_dataset.npz'
 # data_path = './data/extro_seq2seq_dataset.npz'
 word2idx = load_encode('encode_dict.txt')  # load word map
 #
