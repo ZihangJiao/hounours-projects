@@ -23,9 +23,9 @@ batch_size = 50
 
 personality = 'e'
 
-train_data_path = './train_data/'+ personality +'_seq2seq_dataset_train.npz'
-valid_data_path = './valid_data/'+ personality +'_seq2seq_dataset_valid.npz'
-test_data_path = './test_data/'+ personality +'_seq2seq_dataset_test.npz'
+train_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_train.npz'
+valid_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_valid.npz'
+test_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_test.npz'
 # data_path = './data/extro_seq2seq_dataset.npz'
 word2idx = load_encode('encode_dict.txt')  # load word map
 #
@@ -38,7 +38,7 @@ word2idx = load_encode('encode_dict.txt')  # load word map
 # train_set, valid_set, test_set = random_split(
     # seq2seq_dataset, [train_size, valid_size, test_size])
 
-train_set = Seq2SeqDataset(train_setdata_path, word2idx)
+train_set = Seq2SeqDataset(train_data_path, word2idx)
 valid_set = Seq2SeqDataset(valid_data_path, word2idx)
 test_set = Seq2SeqDataset(test_data_path, word2idx)
 

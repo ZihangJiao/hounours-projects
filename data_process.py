@@ -332,13 +332,13 @@ for personality in ['e','i','n']:
 
     # make three kinds of dataset
     make_dataset(seq2seq_preprocess, personality_train_list, personality,
-                    './train_data/'+ personality +'_seq2seq_dataset_train.npz')
+                    './train_valid_test_data/'+ personality +'_seq2seq_dataset_train.npz')
     print(personality + ' training data finished')
     make_dataset(seq2seq_preprocess, personality_valid_list, personality,
-                    './train_data/'+ personality +'_seq2seq_dataset_valid.npz')
+                    './train_valid_test_data/'+ personality +'_seq2seq_dataset_valid.npz')
     print(personality + ' validation data finished')
     make_dataset(seq2seq_preprocess, personality_test_list, personality,
-                    './train_data/'+ personality +'_seq2seq_dataset_test.npz')
+                    './train_valid_test_data/'+ personality +'_seq2seq_dataset_test.npz')
     print(personality + ' test data finished')
 
 

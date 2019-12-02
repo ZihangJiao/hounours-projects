@@ -350,13 +350,15 @@ class LSTMDecoder(nn.Module):
             dec_outputs[:, t, :] = step_output
             # print(dec_outputs)
 
-        outputs = torch.tanh(dec_outputs[:, :, :-1])
+        # dof123 = torch.tanh(dec_outputs[:, :, :-1])
+        dof_123 = torch.tanh(dec_outputs[:, :, :-1])
+        dof_4 = torch.tanh(dec_outputs[:, :, -1]).unsqueeze(-1)
         # dof_4 = torch.relu(dec_outputs[:, :, -1]).unsqueeze(-1)
 
         # print("dof123: " + str(dof_123))
         # print("dof_4: " + str(dof_4))
 
-        # outputs = torch.cat([dof_123, dof_4], dim=-1)
+        outputs = torch.cat([dof_123, dof_4], dim=-1)
 
         # output shape [batch_size, max_seq_len_dec, num_dof]
         # attn_weights [batch_size, max_seq_len_dec, max_seq_len_enc]
