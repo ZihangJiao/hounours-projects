@@ -251,20 +251,46 @@ def make_dataset(process_function, paired_file_paths: list, ptype: str,
 
     all_input = []
     all_target = []
+
+    input_train_set = []
+    input_valid_set = []
+    input_test_set = []
+
+    target_train_set = []
+    target_valid_set = []
+    target_test_set = []
     # apply 'preprocess' method to for each text/motion pair
     for pair in paired_file_paths:
         # the last letter of file name means speaker's personality
         if pair[0][-1] == ptype:
             inputs, targets = process_function(pair[1], pair[2], word2idx)
-            all_input.append(inputs)
-            all_target.append(targets)
+            train_size = int(0.8 * len(inputs))
+            valid_size = int(0.1 * len(inputs))
+            test_size = len(inputs) - train_size - valid_size
+
+            for i in range(len(inputs)):
+                if (i < train_size):
+                    input_train_set.append(inputs[i])
+                    target_train_set.append(targets[i])
+                elif (i < train_size+valid_size):
+                    input_valid_set.append(inputs[i])
+                    target_valid_set.append(targets[i])
+                else:
+                    input_test_set.append(inputs[i])
+                    target_test_set.append(targets[i])
+            # all_input.append(inputs)
+            # all_target.append(targets)
 
     # concatenate the results together and save
-    all_input = [line for inputs in all_input for line in inputs]
-    all_target = [freq for targets in all_target for freq in targets]
-    np.savez(save_path, input=all_input, target=all_target)
-
-
+    # all_input = [line for inputs in all_input for line in inputs]
+    # all_target = [freq for targets in all_target for freq in targets]
+    # print(len(all_input))
+    # print(len(input_train_set))
+    # print(len(input_valid_set))
+    # print(len(input_test_set))
+    np.savez(save_path+"_train.npz", input=input_train_set, target=target_train_set)
+    np.savez(save_path+"_valid.npz", input=input_valid_set, target=target_valid_set)
+    np.savez(save_path+"_test.npz", input=input_test_set, target=target_test_set)
 #%%
 # this code is to make dataset for DCT baseline model
 if True:
@@ -345,11 +371,11 @@ word2idx = load_encode('encode_dict.txt')
 
 # make three kinds of dataset
 make_dataset(seq2seq_preprocess, paired_file_paths, 'e',
-                './data/extro_seq2seq_dataset.npz')
+                './data/extro_seq2seq_dataset')
 print('extroverted data finished')
 make_dataset(seq2seq_preprocess, paired_file_paths, 'i',
-                './data/intro_seq2seq_dataset.npz')
+                './data/intro_seq2seq_dataset')
 print('introverted data finished')
 make_dataset(seq2seq_preprocess, paired_file_paths, 'n',
-                './data/natural_seq2seq_dataset.npz')
+                './data/natural_seq2seq_dataset')
 print('natural data finished')

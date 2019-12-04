@@ -26,9 +26,17 @@ batch_size = 50
 # train_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_train.npz'
 # valid_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_valid.npz'
 # test_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_test.npz'
-extro_data_path = './data/extro_seq2seq_dataset.npz'
-intro_data_path = './data/intro_seq2seq_dataset.npz'
-natural_data_path = './data/natural_seq2seq_dataset.npz'
+extro_data_train_path = './data/extro_seq2seq_dataset_train.npz'
+extro_data_valid_path = './data/extro_seq2seq_dataset_valid.npz'
+extro_data_test_path = './data/extro_seq2seq_dataset_test.npz'
+
+intro_data_train_path = './data/intro_seq2seq_dataset_train.npz'
+intro_data_valid_path = './data/intro_seq2seq_dataset_valid.npz'
+intro_data_test_path = './data/intro_seq2seq_dataset_test.npz'
+
+natural_data_train_path = './data/natural_seq2seq_dataset_train.npz'
+natural_data_valid_path = './data/natural_seq2seq_dataset_valid.npz'
+natural_data_test_path = './data/natural_seq2seq_dataset_test.npz'
 # data_path = './data/extro_seq2seq_dataset.npz'
 word2idx = load_encode('encode_dict.txt')  # load word map
 #
@@ -41,9 +49,18 @@ word2idx = load_encode('encode_dict.txt')  # load word map
 # train_set, valid_set, test_set = random_split(
     # seq2seq_dataset, [train_size, valid_size, test_size])
 
-train_set = Seq2SeqDataset(train_data_path, word2idx)
-valid_set = Seq2SeqDataset(valid_data_path, word2idx)
-test_set = Seq2SeqDataset(test_data_path, word2idx)
+train_set = Seq2SeqDataset(extro_data_train_path, word2idx) + Seq2SeqDataset(intro_data_train_path, word2idx) + Seq2SeqDataset(natural_data_train_path, word2idx)
+valid_set = Seq2SeqDataset(extro_data_valid_path, word2idx) + Seq2SeqDataset(intro_data_valid_path, word2idx) + Seq2SeqDataset(natural_data_valid_path, word2idx)
+test_set = Seq2SeqDataset(extro_data_test_path, word2idx) + Seq2SeqDataset(intro_data_test_path, word2idx) + Seq2SeqDataset(natural_data_test_path, word2idx)
+
+input_test_set = []
+target_test_set = []
+for i in range(0, len(test_set)):
+    input_test_set.append(test_set[i][0])
+    target_test_set.append(test_set[i][1])
+
+np.savez("test_data.npz", input=input_test_set, target=target_test_set)
+
 
 train_dataloader = DataLoader(train_set,
                               batch_size,

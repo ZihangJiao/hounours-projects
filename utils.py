@@ -137,7 +137,7 @@ def pair_files(folder_path_text: str, text_suffix: str,
     # folder structure: folder/NAME/NAME_NUM_[ine].suffix
     path_WC = folder_path_text + '*/*_??_[ine]' + text_suffix
     transcript_file_list = glob.glob(path_WC, recursive=True)
-    print(len(transcript_file_list))
+    # print(len(transcript_file_list))
     transcript_file_dict = path_list2dict(transcript_file_list, text_suffix)
 
     # 2. read names of all MOTION file
@@ -156,7 +156,7 @@ def pair_files(folder_path_text: str, text_suffix: str,
         for name in shared_names
         if (name in transcript_file_dict) and (name in motion_file_dict)
     ]
-    print((paired_file_paths))
+    # print((paired_file_paths))
 
     return paired_file_paths
 

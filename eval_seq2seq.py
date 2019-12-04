@@ -24,6 +24,7 @@ import math
 
 import os
 
+
 seed = 42
 torch.manual_seed(seed)
 #%%
@@ -37,9 +38,17 @@ batch_size = 11
 # valid_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_valid.npz'
 # test_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_test.npz'
 
-extro_data_path = './data/extro_seq2seq_dataset.npz'
-intro_data_path = './data/intro_seq2seq_dataset.npz'
-natural_data_path = './data/natural_seq2seq_dataset.npz'
+extro_data_train_path = './data/extro_seq2seq_dataset_train.npz'
+extro_data_valid_path = './data/extro_seq2seq_dataset_valid.npz'
+extro_data_test_path = './data/extro_seq2seq_dataset_test.npz'
+
+intro_data_train_path = './data/intro_seq2seq_dataset_train.npz'
+intro_data_valid_path = './data/intro_seq2seq_dataset_valid.npz'
+intro_data_test_path = './data/intro_seq2seq_dataset_test.npz'
+
+natural_data_train_path = './data/natural_seq2seq_dataset_train.npz'
+natural_data_valid_path = './data/natural_seq2seq_dataset_valid.npz'
+natural_data_test_path = './data/natural_seq2seq_dataset_test.npz'
 word2idx = load_encode('encode_dict.txt')  # load word map
 
 idx2word = {v: k for k, v in word2idx.items()}
@@ -53,23 +62,28 @@ idx2word = {v: k for k, v in word2idx.items()}
 #
 # train_set, valid_set, test_set = random_split(
 #     seq2seq_dataset, [train_size, valid_size, test_size])
+#
+# train_set = Seq2SeqDataset(extro_data_train_path, word2idx) + Seq2SeqDataset(intro_data_train_path, word2idx) + Seq2SeqDataset(natural_data_train_path, word2idx)
+# valid_set = Seq2SeqDataset(extro_data_valid_path, word2idx) + Seq2SeqDataset(intro_data_valid_path, word2idx) + Seq2SeqDataset(natural_data_valid_path, word2idx)
+# test_set = Seq2SeqDataset(extro_data_test_path, word2idx) + Seq2SeqDataset(intro_data_test_path, word2idx) + Seq2SeqDataset(natural_data_test_path, word2idx)
+# intro_set = Seq2SeqDataset(intro_data_path, word2idx)
+# natural_set = Seq2SeqDataset(natural_data_path, word2idx)
+# print((test_set)[0])
+# size_exo = len(extro_set)
+# size_intro = len(intro_set)
+# size_natural = len(natural_set)
 
-extro_set = Seq2SeqDataset(extro_data_path, word2idx)
-intro_set = Seq2SeqDataset(intro_data_path, word2idx)
-natural_set = Seq2SeqDataset(natural_data_path, word2idx)
-
-train_set = extro_set
-valid_set = extro_set
-test_set = extro_set
-print (extro_set[0][1])
-train_dataloader = DataLoader(train_set,
-                              batch_size=1,
-                              shuffle=True,
-                              collate_fn=seq2seq_collate_fn)
-valid_dataloader = DataLoader(valid_set,
-                              batch_size,
-                              shuffle=True,
-                              collate_fn=seq2seq_collate_fn)
+test_set = Seq2SeqDataset("test_data.npz", word2idx)
+print(len(test_set))
+#
+# train_dataloader = DataLoader(train_set,
+#                               batch_size=1,
+#                               shuffle=True,
+#                               collate_fn=seq2seq_collate_fn)
+# valid_dataloader = DataLoader(valid_set,
+#                               batch_size,
+#                               shuffle=True,
+#                               collate_fn=seq2seq_collate_fn)
 test_dataloader = DataLoader(test_set,
                              batch_size=1,
                              collate_fn=seq2seq_collate_fn)
