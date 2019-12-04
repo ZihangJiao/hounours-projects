@@ -91,7 +91,8 @@ class Seq2SeqModel(nn.Module):
                                    enc_layers=enc_layers,
                                    bidirectional=bidirectional,
                                    dropout_prob=dropout_prob,
-                                   pretrain_weight=pretrain_weight)
+                                   pretrain_weight=pretrain_weight).to('cuda')
+
 
         out_dim_enc = 2 * enc_dim if bidirectional else enc_dim
         self.decoder = LSTMDecoder(dof=dof,
@@ -99,9 +100,10 @@ class Seq2SeqModel(nn.Module):
                                    out_dim_enc=out_dim_enc,
                                    dec_layers=dec_layers,
                                    dropout_prob=dropout_prob,
-                                   teacher_forcing_ratio=teacher_forcing_ratio)
+                                   teacher_forcing_ratio=teacher_forcing_ratio).to('cuda')
 
     def forward(self, in_seq, tgt_seq, lengths):
+
         unpacked_out_enc, enc_mask = self.encoder(in_seq, lengths)
         dec_outputs, attn_weights = self.decoder(tgt_seq, unpacked_out_enc,
                                                  enc_mask)
@@ -160,8 +162,8 @@ class LSTMEncoder(nn.Module):
         #### LSTM part
         # initialization of hidden/cell states using Orthogonal Matrix
         num_states = self.enc_layers * (2 if self.bidirectional else 1)
-        h0 = torch.empty(num_states, len(embeddings), self.enc_dim)
-        c0 = torch.empty(num_states, len(embeddings), self.enc_dim)
+        h0 = torch.empty(num_states, len(embeddings), self.enc_dim).cuda()
+        c0 = torch.empty(num_states, len(embeddings), self.enc_dim).cuda()
         nn.init.orthogonal_(h0)
         nn.init.orthogonal_(c0)
 
@@ -169,9 +171,11 @@ class LSTMEncoder(nn.Module):
         packed_embeddings = pack_padded_sequence(embeddings,
                                                  lengths,
                                                  batch_first=True)
+
         packed_out_enc, (hidd_stat_enc,
                          cell_stat_enc) = self.lstm(packed_embeddings,
                                                     (h0, c0))
+
         unpacked_out_enc, lengths_enc = pad_packed_sequence(packed_out_enc,
                                                             batch_first=True)
         unpacked_out_enc = F.dropout(unpacked_out_enc,
@@ -180,8 +184,6 @@ class LSTMEncoder(nn.Module):
 
         # unpacked_out_enc shape [batch_size, max_seq_len, enc_dim]
         # enc_mask shape [batch_size, max_seq_len]
-
-        # print(unpacked_out_enc,enc_mask)
         return unpacked_out_enc, enc_mask
 
 
@@ -265,7 +267,7 @@ class LSTMDecoder(nn.Module):
                                 if layer == 0 else self.dec_dim,
                         hidden_size=self.dec_dim)
             for layer in range(self.dec_layers)
-        ])
+        ]).cuda()
 
         self.attn = AttentionLayer(self.out_dim_enc, self.dec_dim)
         self.final_projection = nn.Linear(self.dec_dim, self.dof)
@@ -289,11 +291,12 @@ class LSTMDecoder(nn.Module):
         # creat the lstm input feed and hidden/cell states of (t = -1) step
         input_feed = tgt_seq.data.new(batch_size, self.dec_dim).zero_()
         hidd_stat_dec = [
-            torch.zeros(batch_size, self.dec_dim)
+            torch.zeros(batch_size, self.dec_dim).cuda()
             for i in range(self.dec_layers)
         ]
+
         cell_stat_dec = [
-            torch.zeros(batch_size, self.dec_dim)
+            torch.zeros(batch_size, self.dec_dim).cuda()
             for i in range(self.dec_layers)
         ]
 
@@ -315,7 +318,7 @@ class LSTMDecoder(nn.Module):
             if use_teacher_forcing or t < self.lookback:
                 # concatenate correct previous motion and
                 # attentional hidden states of the last time step
-                lstm_input = torch.cat([tgt_seq[:, t, :], input_feed], dim=-1)
+                lstm_input = torch.cat([tgt_seq[:, t, :], input_feed], dim=-1).cuda()
             else:
                 previous_out = dec_outputs[:, t - self.lookback:t, :].detach()
                 previous_out = previous_out.view(batch_size, -1)
@@ -323,7 +326,9 @@ class LSTMDecoder(nn.Module):
 
             # Pass tgt_seq input through each layer(s) and
             # update hidden/cell states
+
             for idx, layer in enumerate(self.lstm):
+                layer = layer.cuda()
                 hidd_stat_dec[idx], cell_stat_dec[idx] = layer(
                     lstm_input, (hidd_stat_dec[idx], cell_stat_dec[idx]))
 
@@ -341,28 +346,21 @@ class LSTMDecoder(nn.Module):
             input_feed = F.dropout(input_feed,
                                    p=self.dropout_prob,
                                    training=self.training)
-            # print(input_feed)
+
             # final projection
             step_output = self.final_projection(input_feed)
-            # print(step_output)
 
             attn_weights[:, t, :] = step_attn_weight
             dec_outputs[:, t, :] = step_output
-            # print(dec_outputs)
 
-        # dof123 = torch.tanh(dec_outputs[:, :, :-1])
+
         dof_123 = torch.tanh(dec_outputs[:, :, :-1])
-        dof_4 = torch.tanh(dec_outputs[:, :, -1]).unsqueeze(-1)
-        # dof_4 = torch.relu(dec_outputs[:, :, -1]).unsqueeze(-1)
-
-        # print("dof123: " + str(dof_123))
-        # print("dof_4: " + str(dof_4))
+        dof_4 = torch.relu(dec_outputs[:, :, -1]).unsqueeze(-1)
 
         outputs = torch.cat([dof_123, dof_4], dim=-1)
 
         # output shape [batch_size, max_seq_len_dec, num_dof]
         # attn_weights [batch_size, max_seq_len_dec, max_seq_len_enc]
-        # print(outputs)
         return outputs, attn_weights
 
     def set_teacher_forcing_ratio(self, ratio: float):
@@ -407,5 +405,4 @@ class nopad_mse_loss(nn.Module):
         loss = self.calc_fn(torch.stack(error_list), dim=0)
 
         # loss shape [1] or [num_dof](keep_dof)
-        print(loss)
         return loss if keep_dof else self.calc_fn(loss)
