@@ -154,7 +154,7 @@ class LSTMEncoder(nn.Module):
         enc_mask = in_seq.eq(0)
 
         #### Embedding part
-        embeddings = self.embedding(in_seq)  # [batch, max_seq_len, embed_dim]
+        embeddings = self.embedding(in_seq.cuda())  # [batch, max_seq_len, embed_dim]
         embeddings = F.dropout(embeddings,
                                p=self.dropout_prob,
                                training=self.training)
@@ -318,10 +318,10 @@ class LSTMDecoder(nn.Module):
             if use_teacher_forcing or t < self.lookback:
                 # concatenate correct previous motion and
                 # attentional hidden states of the last time step
-                lstm_input = torch.cat([tgt_seq[:, t, :], input_feed], dim=-1).cuda()
+                lstm_input = torch.cat([tgt_seq[:, t, :].cuda(), input_feed.cuda()], dim=-1).cuda()
             else:
-                previous_out = dec_outputs[:, t - self.lookback:t, :].detach()
-                previous_out = previous_out.view(batch_size, -1)
+                previous_out = dec_outputs[:, t - self.lookback:t, :].detach().cuda()
+                previous_out = previous_out.view(batch_size, -1).cuda()
                 lstm_input = torch.cat([previous_out, input_feed], dim=-1)
 
             # Pass tgt_seq input through each layer(s) and
@@ -340,7 +340,7 @@ class LSTMDecoder(nn.Module):
             #### Attention part, apply attention to lstm output
             input_feed, step_attn_weight = self.attn(hidd_stat_dec[-1],
                                                      unpacked_out_enc,
-                                                     enc_mask)
+                                                     enc_mask.cuda())
 
             # get the final output of attention layer of one time step
             input_feed = F.dropout(input_feed,

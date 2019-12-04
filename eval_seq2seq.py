@@ -134,7 +134,7 @@ valid_loss = save_state_dict['valid_loss']
 epochs_since_improvement = save_state_dict['epochs_since_improvement']
 
 # if use GPU, uncomment this
-device = torch.device('cpu')
+device = torch.device('cuda')
             # if torch.cuda.is_available()
             # else torch.device('cpu')
 
@@ -195,58 +195,59 @@ target_arr = np.array([i.numpy() for i in target_list])
         # print("here" + str(output_arr[a][b]))
 
 
-#
-# imaginary = []
-# real1 = []
-# real2 = []
-# real3 = []
-#
-# target_imaginary = []
-# target_real1 = []
-# target_real2 = []
-# target_real3 = []
-# # for i in range(len(output_arr)):
-# i = 0
-# for k in range(len(output_arr[i])):
-#     imaginary.append(output_arr[i][k][0])
-#     target_imaginary.append(target_arr[i][k][0])
-#
-#     real1.append(output_arr[i][k][1])
-#     target_real1.append(target_arr[i][k][1])
-#
-#     real2.append(output_arr[i][k][2])
-#     target_real2.append(target_arr[i][k][2])
-#
-#     real3.append(output_arr[i][k][3])
-#     target_real3.append(target_arr[i][k][3])
-# fig, axs = plt.subplots(2,2)
-# axs[0,0].plot(imaginary)
-# axs[0,0].plot(target_imaginary)
-# # axs[0,0].legend('real_imaginary','target_imaginary')
-#
-#
-# axs[0,1].plot(real1)
-# axs[0,1].plot(target_real1)
-# # axs[0,1].legend('real1','target_real1')
-#
-#
-# axs[1,0].plot(real2)
-# axs[1,0].plot(target_real2)
-# # axs[1,0].legend('real2','target_real2')
-#
-# axs[1,1].plot(real3)
-# axs[1,1].plot(target_real3)
-# # axs[1,1].legend('real3','target_real3')
-#
-#
-# plt.savefig('./performance')
 
+imaginary = []
+real1 = []
+real2 = []
+real3 = []
+
+target_imaginary = []
+target_real1 = []
+target_real2 = []
+target_real3 = []
+# for i in range(len(output_arr)):
+i = 0
+for k in range(len(output_arr[i])):
+    imaginary.append(output_arr[i][k][0])
+    target_imaginary.append(target_arr[i][k][0])
+
+    real1.append(output_arr[i][k][1])
+    target_real1.append(target_arr[i][k][1])
+
+    real2.append(output_arr[i][k][2])
+    target_real2.append(target_arr[i][k][2])
+
+    real3.append(output_arr[i][k][3])
+    target_real3.append(target_arr[i][k][3])
+fig, axs = plt.subplots(2,2)
+axs[0,0].plot(imaginary)
+axs[0,0].plot(target_imaginary)
+# axs[0,0].legend('real_imaginary','target_imaginary')
+
+
+axs[0,1].plot(real1)
+axs[0,1].plot(target_real1)
+# axs[0,1].legend('real1','target_real1')
+
+
+axs[1,0].plot(real2)
+axs[1,0].plot(target_real2)
+# axs[1,0].legend('real2','target_real2')
+
+axs[1,1].plot(real3)
+axs[1,1].plot(target_real3)
+# axs[1,1].legend('real3','target_real3')
+
+
+plt.savefig('./performance')
+
+print(output_arr)
 # print("target"+str(output_arr))
 
-#%%
+# %%
 # calculate loss on each dim
 
-
+#
 # err = 0.0
 # for i in range(len(output_list)):
 #     err += criterion(output_list[i].unsqueeze(0),
@@ -279,7 +280,7 @@ target_arr = np.array([i.numpy() for i in target_list])
 # print('corr:', pearson_corr)
 # print('std output:', std_out)
 # print('std target:', std_tgt)
-
+#
 
 
 

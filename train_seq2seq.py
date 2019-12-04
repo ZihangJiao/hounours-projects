@@ -122,7 +122,7 @@ if load_checkpoint_name is not None:
 
 # if use GPU, uncomment this
 # print(torch.cuda.is_available())
-device = torch.device('cpu')
+device = torch.device('cuda')
 #             if torch.cuda.is_available()
 #             else torch.device('cpu')
 
