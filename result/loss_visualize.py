@@ -4,15 +4,16 @@ import matplotlib.pyplot as plt
 import os
 #%%
 # plt.style.use('default')
-losses = np.loadtxt('./result/Seq2Seq_loss_best.txt')
+losses = np.loadtxt('Seq2Seq_loss_0121_225605.txt')
 plt.figure(figsize=(6,4))
 # plt.ylim((0.15, 0.28))
 
 plt.xlabel('epoch')
 plt.ylabel('loss')
 # plt.title('losses of train and valid set')
-
-
+for i in range (0, len(losses[0])-1):
+    losses[0][i] = losses[0][i+1]
+print(losses[0])
 plt.plot(losses[0])
 plt.plot(losses[1])
 
@@ -35,9 +36,9 @@ plt.xticks(np.arange(0,51,10))
 
 plt.legend(['Train loss','Valid loss'])
 plt.grid(True)
-# plt.show()
+plt.show()
 
-# plt.savefig('best_loss.png',bbox_inches = 'tight')
+plt.savefig('best_loss.png',bbox_inches = 'tight')
 
 
 #%%

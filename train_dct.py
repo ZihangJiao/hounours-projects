@@ -19,7 +19,7 @@ torch.manual_seed(seed)
 #%%
 batch_size = 60
 data_path = './data/extro_dct_dataset.npz'
-word2idx = load_encode('encode_dict.txt')
+word2idx = load_encode('vocab_to_int.txt')
 
 # load and split dataset
 tdhm_dataset = TextMotionDataset(data_path)

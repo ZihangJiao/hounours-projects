@@ -346,3 +346,10 @@ contractions_dict = {
     "you're": "you are",
     "you've": "you have"
 }
+
+
+def weight_init_uniform(m):
+    classname = m.__class__.__name__
+    if classname.find('Linear') != -1:
+        m.weight.data.uniform_(0.0, 1.0)
+        m.bias.data.fill_(0)

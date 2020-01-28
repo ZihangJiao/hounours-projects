@@ -23,6 +23,7 @@ import seaborn as sns
 import math
 
 import os
+import json
 
 
 seed = 42
@@ -38,52 +39,21 @@ batch_size = 11
 # valid_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_valid.npz'
 # test_data_path = './train_valid_test_data/'+ personality +'_seq2seq_dataset_test.npz'
 
-extro_data_train_path = './data/extro_seq2seq_dataset_train.npz'
-extro_data_valid_path = './data/extro_seq2seq_dataset_valid.npz'
+
 extro_data_test_path = './data/extro_seq2seq_dataset_test.npz'
 
-intro_data_train_path = './data/intro_seq2seq_dataset_train.npz'
-intro_data_valid_path = './data/intro_seq2seq_dataset_valid.npz'
 intro_data_test_path = './data/intro_seq2seq_dataset_test.npz'
 
-natural_data_train_path = './data/natural_seq2seq_dataset_train.npz'
-natural_data_valid_path = './data/natural_seq2seq_dataset_valid.npz'
 natural_data_test_path = './data/natural_seq2seq_dataset_test.npz'
-word2idx = load_encode('encode_dict.txt')  # load word map
+
+dic = json.load(open("vocab_to_int.txt"))
+word2idx = dic  # load word map
 
 idx2word = {v: k for k, v in word2idx.items()}
 
 
-# load and split dataset
-# seq2seq_dataset = Seq2SeqDataset(data_path, word2idx)
-# train_size = int(0.8 * len(seq2seq_dataset))
-# valid_size = int(0.1 * len(seq2seq_dataset))
-# test_size = len(seq2seq_dataset) - train_size - valid_size
-#
-# train_set, valid_set, test_set = random_split(
-#     seq2seq_dataset, [train_size, valid_size, test_size])
-#
-# train_set = Seq2SeqDataset(extro_data_train_path, word2idx) + Seq2SeqDataset(intro_data_train_path, word2idx) + Seq2SeqDataset(natural_data_train_path, word2idx)
-# valid_set = Seq2SeqDataset(extro_data_valid_path, word2idx) + Seq2SeqDataset(intro_data_valid_path, word2idx) + Seq2SeqDataset(natural_data_valid_path, word2idx)
-# test_set = Seq2SeqDataset(extro_data_test_path, word2idx) + Seq2SeqDataset(intro_data_test_path, word2idx) + Seq2SeqDataset(natural_data_test_path, word2idx)
-# intro_set = Seq2SeqDataset(intro_data_path, word2idx)
-# natural_set = Seq2SeqDataset(natural_data_path, word2idx)
-# print((test_set)[0])
-# size_exo = len(extro_set)
-# size_intro = len(intro_set)
-# size_natural = len(natural_set)
+test_set = Seq2SeqDataset(extro_data_test_path, word2idx)
 
-test_set = Seq2SeqDataset("test_data.npz", word2idx)
-print(len(test_set))
-#
-# train_dataloader = DataLoader(train_set,
-#                               batch_size=1,
-#                               shuffle=True,
-#                               collate_fn=seq2seq_collate_fn)
-# valid_dataloader = DataLoader(valid_set,
-#                               batch_size,
-#                               shuffle=True,
-#                               collate_fn=seq2seq_collate_fn)
 test_dataloader = DataLoader(test_set,
                              batch_size=1,
                              collate_fn=seq2seq_collate_fn)
@@ -94,7 +64,7 @@ test_dataloader = DataLoader(test_set,
 
 dof_num = 4
 embed_dim = 100
-learning_rate = 1e-3
+learning_rate = 1e-4
 encoder_hidden_dim = 128
 decoder_hidden_dim = 128
 model_save_folder = './saved_models/'
@@ -109,24 +79,25 @@ epochs_since_improvement = 0
 embedding = np.load('glove_pretrained_weights.npy', allow_pickle=True)
 embedding = torch.from_numpy(embedding).float()
 
-model = Seq2SeqModel(embed_dim=embed_dim,
-                     vocab_size=len(embedding),
+model = Seq2SeqModel(embed_dim=100,
+                     vocab_size=3933,
                      dof=dof_num,
                      enc_dim=encoder_hidden_dim,
                      dec_dim=decoder_hidden_dim,
                      enc_layers=1,
                      dec_layers=1,
                      bidirectional=True,
-                     dropout_prob=0.25,
-                     pretrain_weight=embedding,
-                     teacher_forcing_ratio=0.5)
+                    #  dropout_prob=0.5,
+                     pretrain_weight=None,
+                     teacher_forcing_ratio=0)
 
 # setting optimizer
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 criterion = nopad_mse_loss(reduction='mean')
 
 # load saved models
-save_state_dict = torch.load(model_save_folder+'best_checkpoint_Seq2Seq_best')
+save_state_dict = torch.load(model_save_folder+'last_checkpoint_Seq2Seq_0121_232045')
+# print(save_state_dict['model'])
 model.load_state_dict(save_state_dict['model'])
 optimizer.load_state_dict(save_state_dict['optim'])
 epoch = save_state_dict['epoch']
@@ -146,7 +117,7 @@ criterion = criterion.to(device)
 
 #%%
 print('Evaluating on test set')
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
+# os.environ['KMP_DUPLICATE_LIB_OK']='True's
 output_list = []
 attn_weights_list = []
 in_seq_list = []
@@ -154,14 +125,19 @@ tgt_len_list = []
 target_list = []
 losses = AverageMeter()
 model.eval()
-for idx, (in_seq, tgt_seq, target, in_len, tgt_len) in enumerate(test_dataloader):
+# print(test_dataloader)
+for idx, (in_seq, tgt_seq, in_len, tgt_len) in enumerate(test_dataloader):
+    # print(len(tgt_seq[0]))
 
     with torch.no_grad():
         # calculate separately
         unpacked_out_enc, enc_mask = model.encoder(in_seq, in_len)
-        model.decoder.set_teacher_forcing_ratio(1)
-        output, attn_weights = model.decoder(tgt_seq, unpacked_out_enc, enc_mask)
-
+        # print(unpacked_out_enc)
+        # print(enc_mask)
+        model.decoder.set_teacher_forcing_ratio(0.0)
+        # output, attn_weights = model.decoder(tgt_seq, unpacked_out_enc, enc_mask)
+        output, attn_weights = model(in_seq, tgt_seq, in_len)
+        # print(output)
 
     # save the results for subsequent analysis
     # print("out: "+str(output))
@@ -170,13 +146,15 @@ for idx, (in_seq, tgt_seq, target, in_len, tgt_len) in enumerate(test_dataloader
     output_list.append(output.squeeze())
     attn_weights_list.append(attn_weights.squeeze())
     in_seq_list.append(in_seq.squeeze())
+    # print(in_seq_list)
     tgt_len_list.append(tgt_len.squeeze())
-    target_list.append(target.squeeze())
+    target_list.append(tgt_seq.squeeze())
     # print('.', end='')
-
+# print(in_seq_list)
 output_arr = np.array([i.numpy() for i in output_list])
 target_arr = np.array([i.numpy() for i in target_list])
-# print(output_arr[0][0])
+# print(target_arr)
+# print(output_arr[0])
 
 
 # the_sum = 0.0
@@ -196,91 +174,95 @@ target_arr = np.array([i.numpy() for i in target_list])
 
 
 
-imaginary = []
-real1 = []
-real2 = []
-real3 = []
+# imaginary = []
+# real1 = []
+# real2 = []
+# real3 = []
+#
+# target_imaginary = []
+# target_real1 = []
+# target_real2 = []
+# target_real3 = []
+# # for i in range(len(output_arr)):print(dec_outputs)
+# i = 4
+# for k in range(int(len(output_arr[i]))):
+#     imaginary.append(output_arr[i][k][0])
+#     target_imaginary.append(target_arr[i][k][0])
+#
+#     real1.append(output_arr[i][k][1])
+#     target_real1.append(target_arr[i][k][1])
+#
+#     real2.append(output_arr[i][k][2])
+#     target_real2.append(target_arr[i][k][2])
+#
+#     real3.append(output_arr[i][k][3])
+#     target_real3.append(target_arr[i][k][3])
+# fig, axs = plt.subplots(2,2)
+# axs[0,0].plot(imaginary)
+# axs[0,0].plot(target_imaginary)
+# plt.setp(axs[0,0],ylim = (0.97,1.01))
+# # axs[0,0].legend('real_imaginary','target_imaginary')
+#
+#
+# axs[0,1].plot(real1)
+# axs[0,1].plot(target_real1)
+# plt.setp(axs[0,1],ylim = (-0.1,0.1))
+# # axs[0,1].legend('real1','target_real1')
+#
+#
+# axs[1,0].plot(real2)
+# axs[1,0].plot(target_real2)
+# plt.setp(axs[1,0],ylim = (-0.2,0.2))
+# # axs[1,0].legend('real2','target_real2')
+#
+# axs[1,1].plot(real3)
+# axs[1,1].plot(target_real3)
+# plt.setp(axs[1,1],ylim = (-0.1,0.1))
+# # axs[1,1].legend('real3','target_real3')
+#
+#
+# plt.savefig('./performance')
 
-target_imaginary = []
-target_real1 = []
-target_real2 = []
-target_real3 = []
-# for i in range(len(output_arr)):
-i = 0
-for k in range(len(output_arr[i])):
-    imaginary.append(output_arr[i][k][0])
-    target_imaginary.append(target_arr[i][k][0])
-
-    real1.append(output_arr[i][k][1])
-    target_real1.append(target_arr[i][k][1])
-
-    real2.append(output_arr[i][k][2])
-    target_real2.append(target_arr[i][k][2])
-
-    real3.append(output_arr[i][k][3])
-    target_real3.append(target_arr[i][k][3])
-fig, axs = plt.subplots(2,2)
-axs[0,0].plot(imaginary)
-axs[0,0].plot(target_imaginary)
-# axs[0,0].legend('real_imaginary','target_imaginary')
-
-
-axs[0,1].plot(real1)
-axs[0,1].plot(target_real1)
-# axs[0,1].legend('real1','target_real1')
-
-
-axs[1,0].plot(real2)
-axs[1,0].plot(target_real2)
-# axs[1,0].legend('real2','target_real2')
-
-axs[1,1].plot(real3)
-axs[1,1].plot(target_real3)
-# axs[1,1].legend('real3','target_real3')
-
-
-plt.savefig('./performance')
-
-print(output_arr)
+# print(output_arr)
 # print("target"+str(output_arr))
 
 # %%
 # calculate loss on each dim
 
-#
-# err = 0.0
-# for i in range(len(output_list)):
-#     err += criterion(output_list[i].unsqueeze(0),
-#                     target_list[i].unsqueeze(0),
-#                     tgt_len_list[i].unsqueeze(0),
-#                     keep_dof=True)
-# err /= len(output_list)
-# #%%
-# std_out = 0.0
-# std_tgt = 0.0
-#
-# for i in range(len(output_arr)):
-#     std_out += np.std(output_arr[i],axis=0)
-#     std_tgt += np.std(target_arr[i],axis=0)
-#
-#
-# std_out /= len(output_arr)
-# std_tgt /= len(output_arr)
-# # print(std_out)
-# #%%
-# pearson_corr = np.zeros(4)
-# for i in range(len(output_arr)):
-#     for j in range(4):
-#         pearson_corr[j] += np.corrcoef(output_arr[i][:,j], target_arr[i][:,j])[0, 1]
-#
-# pearson_corr /= len(output_arr)
-#
-# #%%
-# print('mse:', err.numpy())
-# print('corr:', pearson_corr)
-# print('std output:', std_out)
-# print('std target:', std_tgt)
-#
+
+err = 0.0
+for i in range(len(output_list)):
+    err += criterion(output_list[i].unsqueeze(0),
+                    target_list[i].unsqueeze(0),
+                    tgt_len_list[i].unsqueeze(0),
+                    keep_dof=True)
+err /= len(output_list)
+#%%
+std_out = 0.0
+std_tgt = 0.0
+
+for i in range(len(output_arr)):
+    std_out += np.std(output_arr[i],axis=0)
+    std_tgt += np.std(target_arr[i],axis=0)
+
+
+std_out /= len(output_arr)
+std_tgt /= len(output_arr)
+# print(std_out)
+#%%
+pearson_corr = np.zeros(4)
+for i in range(len(output_arr)):
+    for j in range(4):
+        pearson_corr[j] += np.corrcoef(output_arr[i][:,j], target_arr[i][:,j])[0, 1]
+
+pearson_corr /= len(output_arr)
+
+# %%
+print('mse:', err.numpy())
+print('corr:', pearson_corr)
+print('std output:', std_out)
+print('std target:', std_tgt)
+
 
 
 

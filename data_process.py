@@ -117,121 +117,190 @@ def dct_preprocess(transcript_path: str, motion_path: str,
 
     return inputs, targets
 
+
+def is_number(s: str) -> bool:
+    try:
+        float(s)
+        return True
+    except ValueError:
+        # print("Here")
+        return False
+
 #%%
+# def seq2seq_preprocess(transcript_path: str, motion_path: str,
+#                         dictionary: dict) -> (np.ndarray, np.ndarray):
+#     """Load sentences and corresponding motions for one conversation
+#
+#     Same as the DCT process function. Encode the sentences and keep the
+#     original motion time series rather than performing DCT transformations.
+#
+#     Args:
+#         transcript_path: path to the transcription file
+#         motion_path: path to the motion file
+#         dictionary: wordmap that convert word to its index
+#
+#     Returns:
+#         inputs: as the input of the network,
+#             shape [num_sentences, variable length of sentence]
+#         targets: time series of corresponding motions,
+#             shape [num_sentences, variable length of motion]
+#     """
+#     transcripts = []
+#     intervals = []
+#
+#
+#     # load transcript and motion files
+#     with open(transcript_path, 'r') as f:
+#         for line in f.readlines():
+#             line = line.strip().split()
+#
+#             if not is_number(line[1]) or not is_number(line[2]):
+#                 continue  ### there're wrong formats in some lines
+#
+#             # each interval is 10ms, time unit in this file is 'second'
+#             # so *100 to make it a integer
+#             start_time = int(float(line[1]) * 100)
+#             end_time = int(float(line[2]) * 100)
+#             text = line[3:]
+#
+#
+#             # discard too short sequences
+#             if len(text) < 5 or end_time - start_time < 20:
+#                 continue
+#             transcripts.append(text)
+#             intervals.append([start_time, end_time])
+#
+#     motions = np.loadtxt(motion_path,
+#                          usecols=range(4),
+#                          skiprows=17,
+#                          dtype='float')
+#
+#     #### Text part
+#     # Encode the transcripts based on preprocessed dictionary
+#     new_transcripts = []
+#     new_intervals = []
+#
+#     for idx, line in enumerate(transcripts):
+#         # check if the end interval is out of motion range
+#
+#         if intervals[idx][1] > len(motions):
+#             break
+#         new_intervals.append(intervals[idx])
+#
+#         new_sentence = []
+#         new_sentence.append(dictionary['<bos>'])  # begin of sentence
+#         for token in line:
+#             # Some words need to be split, but intervals not.
+#             words = token_regularizer(token)
+#
+#             # there may be several words after being splited
+#             for w in words:
+#                 if w in dictionary:
+#                     new_sentence.append(dictionary[w])
+#                 else:
+#                     new_sentence.append(dictionary['<unk>'])
+#
+#         new_sentence.append(dictionary['<eos>'])  # end of sentence
+#         new_transcripts.append(new_sentence)
+#     inputs = np.array(new_transcripts)
+#
+#     #### Motion part
+#     # Extract the motion data based on intervals
+#     num_dof = 4
+#     targets = []
+#     for period in new_intervals:
+#         start_time = period[0]
+#         end_time = period[1]
+#
+#         temp_motion = motions[start_time:end_time]
+#         temp_motion = np.array(temp_motion)
+#
+#         targets.append(temp_motion)
+#     print(len(inputs))
+#     return inputs, targets
+
+
+
 def seq2seq_preprocess(transcript_path: str, motion_path: str,
-                        dictionary: dict) -> (np.ndarray, np.ndarray):
-    """Load sentences and corresponding motions for one conversation
-
-    Same as the DCT process function. Encode the sentences and keep the
-    original motion time series rather than performing DCT transformations.
-
-    Args:
-        transcript_path: path to the transcription file
-        motion_path: path to the motion file
-        dictionary: wordmap that convert word to its index
-
-    Returns:
-        inputs: as the input of the network,
-            shape [num_sentences, variable length of sentence]
-        targets: time series of corresponding motions,
-            shape [num_sentences, variable length of motion]
-    """
+                       dictionary: dict) -> (np.ndarray, np.ndarray):
     transcripts = []
     intervals = []
 
-    def is_number(s: str) -> bool:
-        try:
-            float(s)
-            return True
-        except ValueError:
-            return False
+    prev_sentense = ''
+    prev_interval = [0,0]
 
-    # load transcript and motion files
+    motions = np.loadtxt(motion_path, usecols=range(4), skiprows=17,
+                         dtype='float')
+
+
     with open(transcript_path, 'r') as f:
         for line in f.readlines():
             line = line.strip().split()
-
+            # print(line)
             if not is_number(line[1]) or not is_number(line[2]):
-                continue  ### there're wrong formats in some lines
-
-            # each interval is 10ms, time unit in this file is 'second'
-            # so *100 to make it a integer
-            start_time = int(float(line[1]) * 100)
-            end_time = int(float(line[2]) * 100)
-            text = line[3:]
-
-            # discard too short sequences
-            if len(text) < 5 or end_time - start_time < 20:
                 continue
-            transcripts.append(text)
-            intervals.append([start_time, end_time])
+            start_time = int(float(line[1]) * 100)
+            end_time = int(float(line[2])*100)
+            text = line[3:]
+            # print(len(text))
 
-    motions = np.loadtxt(motion_path,
-                         usecols=range(4),
-                         skiprows=17,
-                         dtype='float')
 
-    #### Text part
-    # Encode the transcripts based on preprocessed dictionary
-    new_transcripts = []
-    new_intervals = []
-    for idx, line in enumerate(transcripts):
-        # check if the end interval is out of motion range
-        if intervals[idx][1] > len(motions):
-            break
-        new_intervals.append(intervals[idx])
+            if(start_time > len(motions)):
+                continue
 
-        new_sentence = []
-        new_sentence.append(dictionary['<bos>'])  # begin of sentence
-        for token in line:
-            # Some words need to be split, but intervals not.
-            words = token_regularizer(token)
+            if(float(line[1]) - prev_interval[1]/100.0 <= 0.5) and (len(prev_sentense) + len(text) <= 50):
+                prev_sentense += text
+                prev_interval[1] = end_time
 
-            # there may be several words after being splited
-            for w in words:
-                if w in dictionary:
-                    new_sentence.append(dictionary[w])
-                else:
-                    new_sentence.append(dictionary['<unk>'])
+            elif len(text) <= 5:
+                continue
+#                 去掉过短句子
+            else:
+                transcripts.append(convert_to_ints(prev_sentense))
+                intervals.append(prev_interval)
+                prev_sentense = text
+                prev_interval = [start_time,end_time]
+    # for i in transcripts:
+    #     print(len(i))
 
-        new_sentence.append(dictionary['<eos>'])  # end of sentence
-        new_transcripts.append(new_sentence)
-    inputs = np.array(new_transcripts)
 
-    #### Motion part
-    # Extract the motion data based on intervals
+
+
+
+
     num_dof = 4
     targets = []
-    for period in new_intervals:
+    for period in intervals[1:]:
         start_time = period[0]
         end_time = period[1]
 
         temp_motion = motions[start_time:end_time]
         temp_motion = np.array(temp_motion)
 
-        targets.append(temp_motion)
+        if not temp_motion.any():
+            print(motion_path)
+            continue
+            # print(transcript_path)
 
+            # print(start_time)
+            # print(end_time)
+            # print(temp_motion)
+            # print('wow')
+        else:
+            # scaled_temp_motion = (temp_motion - temp_motion.mean())/temp_motion.std()
+            # print(scaled_temp_motion)
+            targets.append(temp_motion)
+
+    inputs =  np.array(transcripts[1:])
+    # print(inputs)
+#     print(len(inputs))
+#     print(targets)
+    if(len(inputs) != len(targets)):
+        print('wow')
     return inputs, targets
 
-# def make_different_datasets(paired_file_paths: list):
-#     Dictionary_e = defaultdict(dict)
-#     Dictionary_i = defaultdict(dict)
-#     Dictionary_n = defaultdict(dict)
-#     for pair in paired_file_paths:
-#         if pair[0][-1] == 'e':
-#             Dictionary_e[pair[1]] = pair[2]
-#         elif pair[0][-1] == 'i':
-#             Dictionary_i[pair[1]] = pair[2]
-#         elif pair[0][-1] == 'n':
-#             Dictionary_n[pair[1]] = pair[2]
-#
-#     with open('e.dic', 'w') as fp:
-#         json.dump(Dictionary_e, fp)
-#     with open('i.dic', 'w') as fp:
-#         json.dump(Dictionary_i, fp)
-#     with open('n.dic', 'w') as fp:
-#         json.dump(Dictionary_n, fp)
-#%%
+
+
 def make_dataset(process_function, paired_file_paths: list, ptype: str,
                  save_path: str) -> None:
     """"Calls preprocess methods and save processed data.
@@ -252,34 +321,76 @@ def make_dataset(process_function, paired_file_paths: list, ptype: str,
     all_input = []
     all_target = []
 
-    input_train_set = []
-    input_valid_set = []
-    input_test_set = []
+    input_train = []
+    input_valid = []
+    input_test = []
 
-    target_train_set = []
-    target_valid_set = []
-    target_test_set = []
+    target_train = []
+    target_valid = []
+    target_test = []
     # apply 'preprocess' method to for each text/motion pair
     for pair in paired_file_paths:
         # the last letter of file name means speaker's personality
+
         if pair[0][-1] == ptype:
             inputs, targets = process_function(pair[1], pair[2], word2idx)
-            train_size = int(0.8 * len(inputs))
-            valid_size = int(0.1 * len(inputs))
-            test_size = len(inputs) - train_size - valid_size
+            # train_size = int(0.8 * len(inputs))
+            # valid_size = int(0.1 * len(inputs))
+            # test_size = len(inputs) - train_size - valid_size
 
-            for i in range(len(inputs)):
-                if (i < train_size):
-                    input_train_set.append(inputs[i])
-                    target_train_set.append(targets[i])
-                elif (i < train_size+valid_size):
-                    input_valid_set.append(inputs[i])
-                    target_valid_set.append(targets[i])
-                else:
-                    input_test_set.append(inputs[i])
-                    target_test_set.append(targets[i])
-            # all_input.append(inputs)
-            # all_target.append(targets)
+            # print(len(inputs))
+
+            # for i in range(len(inputs)):
+            #     if (i < train_size):
+            #         input_train_set.append(inputs[i])
+            #         target_train_set.append(targets[i])
+            #     elif (i < train_size+valid_size):
+            #         input_valid_set.append(inputs[i])
+            #         target_valid_set.append(targets[i])
+            #     else:
+            #         input_test_set.append(inputs[i])
+            #         target_test_set.append(targets[i])
+
+
+            all_input.append(inputs)
+            all_target.append(targets)
+
+    train_size = int(0.8 * len(all_input))
+    valid_size = int(0.1 * len(all_input))
+    test_size = len(all_input) - train_size - valid_size
+
+    for i in range(0, train_size):
+        for j in range(0, len(all_input[i])):
+            input_train.append(all_input[i][j])
+
+
+    for i in range(train_size, train_size + valid_size):
+        for j in range(0, len(all_input[i])):
+            input_valid.append(all_input[i][j])
+
+    for i in range(train_size+valid_size, len(all_input)):
+        for j in range(0, len(all_input[i])):
+            input_test.append(all_input[i][j])
+
+
+
+    for i in range(0, train_size):
+        for j in range(0, len(all_target[i])):
+            target_train.append(all_target[i][j])
+
+
+    for i in range(train_size, train_size + valid_size):
+        for j in range(0, len(all_target[i])):
+            target_valid.append(all_target[i][j])
+
+    for i in range(train_size+valid_size, len(all_target)):
+        for j in range(0, len(all_target[i])):
+            target_test.append(all_target[i][j])
+
+
+    np.savez(save_path+"_train.npz", input=input_train, target=target_train)
+    np.savez(save_path+"_valid.npz", input=input_valid, target=target_valid)
+    np.savez(save_path+"_test.npz", input=input_test, target=target_test)
 
     # concatenate the results together and save
     # all_input = [line for inputs in all_input for line in inputs]
@@ -288,9 +399,11 @@ def make_dataset(process_function, paired_file_paths: list, ptype: str,
     # print(len(input_train_set))
     # print(len(input_valid_set))
     # print(len(input_test_set))
-    np.savez(save_path+"_train.npz", input=input_train_set, target=target_train_set)
-    np.savez(save_path+"_valid.npz", input=input_valid_set, target=target_valid_set)
-    np.savez(save_path+"_test.npz", input=input_test_set, target=target_test_set)
+
+    # print(len(input_test_set))
+    # np.savez(save_path+"_train.npz", input=input_train_set, target=target_train_set)
+    # np.savez(save_path+"_valid.npz", input=input_valid_set, target=target_valid_set)
+    # np.savez(save_path+"_test.npz", input=input_test_set, target=target_test_set)
 #%%
 # this code is to make dataset for DCT baseline model
 if True:
@@ -317,13 +430,7 @@ if True:
 
 #%%
 # this code is to make dataset for seq2seq baseline model
-the_path = '/afs/inf.ed.ac.uk/group/cstr/projects/galatea/d02'
-data_path_motion = the_path + '/Recordings_October_2014/DOF-hiroshi/'
-data_path_text = the_path + '/Recordings_October_2014/Transcriptions/transcriptions_phrase_tables/'
 
-paired_file_paths = pair_files(data_path_text, '.TABLE', data_path_motion,
-                                '.qtn')
-word2idx = load_encode('encode_dict.txt')
 
 # make_different_datasets(paired_file_paths)
 
@@ -367,7 +474,85 @@ word2idx = load_encode('encode_dict.txt')
     #                 './train_valid_test_data/'+ personality +'_seq2seq_dataset_test.npz')
     # print(personality + ' test data finished')
 
+total_words = defaultdict(dict)
+for i in range(len(paired_file_paths)):
+    with open(paired_file_paths[i][1],'r') as f:
+        for line in f.readlines():
+            # print(line)
+            line = line.strip().split()
+            # print(line)
+            if(len(line) == 1):
+                words = (line[0].split(','))[3]
+            else:
+                words = token_regularizer(line[3])
+            # print(words)
+            for w in words:
+                if(w not in total_words):
+                    total_words[w] = 1
+                else:
+                    total_words[w] += 1
+# print(total_words)
 
+##所有文件中的词个数
+
+vocab_to_int = {}
+value = 0
+vocab_to_int["<PAD>"] = value
+value += 1
+for word in total_words.keys():
+    # print(word)
+    if '-' not in word:
+        vocab_to_int[word] = value
+        value += 1
+codes = ["<UNK>","<EOS>","<GO>","<Stammer>","<Long>"]
+
+for code in codes:
+    vocab_to_int[code] = len(vocab_to_int)
+
+int_to_vocab = {}
+for word,value in vocab_to_int.items():
+    int_to_vocab[value] = word
+
+# for i in vocab_to_int.keys():
+#     print(i, vocab_to_int[i])
+
+# f = open("vocab_to_int.txt","w")
+# f.write( str(vocab_to_int) )
+# f.close()
+
+
+json.dump(vocab_to_int, open("vocab_to_int.txt",'w'))
+
+dic = json.load(open("vocab_to_int.txt"))
+
+def convert_to_ints(text):
+    ints = []
+    ints.append(vocab_to_int["<GO>"])
+    for sentense in text:
+        sentense_ints = 0
+        for word in sentense.split():
+            if word in vocab_to_int:
+                sentense_ints = vocab_to_int[word]
+            elif word[len(word)-1] == '-':
+                sentense_ints = vocab_to_int["<Stammer>"]
+            elif '-' in word:
+                sentense_ints = vocab_to_int["<Long>"]
+            else:
+                sentense_ints = vocab_to_int["<UNK>"]
+#         if eos:
+#             sentense_ints.append(vocab_to_int["<EOS>"])
+        ints.append(sentense_ints)
+    ints.append(vocab_to_int["<EOS>"])
+    return ints
+
+the_path = '/afs/inf.ed.ac.uk/group/cstr/projects/galatea/d02'
+data_path_motion = the_path + '/Recordings_October_2014/DOF-hiroshi/'
+data_path_text = the_path + '/Recordings_October_2014/Transcriptions/transcriptions_phrase_tables/'
+
+paired_file_paths = pair_files(data_path_text, '.TABLE', data_path_motion,
+                                '.qtn')
+# word2idx = vocab_to_int
+word2idx = dic
 
 # make three kinds of dataset
 make_dataset(seq2seq_preprocess, paired_file_paths, 'e',
