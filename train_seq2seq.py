@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, random_split
 
-from models import Seq2SeqModel, nopad_mse_loss
+from models3 import Seq2SeqModel, nopad_mse_loss
 from dataset import Seq2SeqDataset, seq2seq_collate_fn, BySequenceLengthSampler
 from utils import now_time
 from utils import AverageMeter
@@ -25,6 +25,8 @@ torch.manual_seed(seed) # fix a seed for reproduce
 #%%
 # dataset setting
 batch_size = 50
+
+extro_data_train_sample_path = './data/extro_seq2seq_dataset_train_sample.npz'
 
 extro_data_train_path = './data/extro_seq2seq_dataset_train.npz'
 extro_data_valid_path = './data/extro_seq2seq_dataset_valid.npz'
@@ -93,18 +95,18 @@ del test_set
 #%%
 # building model
 dof_num = 4
-embed_dim = 100
+embed_dim = 32
 learning_rate = 1e-4
-encoder_hidden_dim = 128
-decoder_hidden_dim = 128
+encoder_hidden_dim = 32
+decoder_hidden_dim = 32
 model_save_folder = './saved_models/'
 load_checkpoint_name = None
 
-num_epochs = 50
+num_epochs = 200
 epoch_init = 0
 best_loss = 1000
 epochs_since_improvement = 0
-clip_norm = 500
+clip_norm = 200
 
 # load pretrained word embeddings
 embedding = np.load('glove_pretrained_weights.npy', allow_pickle=True)
@@ -119,8 +121,7 @@ model = Seq2SeqModel(embed_dim=100,
                      dec_layers=1,
                      bidirectional=True,
                     #  dropout_prob=0.5,
-                     pretrain_weight=None, # embedding,
-                     teacher_forcing_ratio=0.1)
+                     pretrain_weight=None)
 
 # setting optimizer
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -159,35 +160,38 @@ for epoch in range(num_epochs):
     losses.reset()
     # print(losses)
     model.train()
-    model.decoder.set_teacher_forcing_ratio(0)
+    # model.decoder.set_teacher_forcing_ratio(0)
+    # with torch.autograd.set_detect_anomaly(True):
+    for idx, (in_seq, tgt_seq,word_time_distribution, in_len, tgt_len) in enumerate(train_dataloader):
 
-    for idx, (in_seq, tgt_seq, in_len, tgt_len) in enumerate(train_dataloader):
-        # print(in_seq)
-        # print(tgt_seq)
+        optimizer.zero_grad()
+            # print(in_seq)
+            # print(tgt_seq)
         in_seq = in_seq.to(device)
         tgt_seq = tgt_seq.to(device)
-        # target = target.to(device)
+        word_time_distribution = word_time_distribution.to(device)
         in_len = in_len.to(device)
         tgt_len = tgt_len.to(device)
 
-        # if error happens when backprop, uncomment this to debug
-        # with torch.autograd.set_detect_anomaly(True):
-        output, attn_weights = model(in_seq, tgt_seq, in_len)
-        # print(attn_weights)
+            # if error happens when backprop, uncomment this to debug
+            # with torch.autograd.set_detect_anomaly(True):
+        output = model(in_seq, tgt_seq,word_time_distribution)
+            # print(attn_weights)
 
-        # calc loss and back-prop
+            # calc loss and back-prop
+
         loss = criterion(output, tgt_seq, tgt_len)
         # print(tgt_seq)
-        # print('otput::')
-        # print(in_seq)
-        # print(output)
-        # print(target.size())
+                # print('otput::')
+                # print(in_seq)
+                # print(output)
+                # print(target.size())
         loss.backward()
 
         # if need to avoid gradient explosion, uncomment this
         # torch.nn.utils.clip_grad_norm_(model.parameters(), clip_norm)
         optimizer.step()
-        optimizer.zero_grad()
+
 
         #  print training progress
         losses.update(loss.item(), len(in_seq))
@@ -198,31 +202,30 @@ for epoch in range(num_epochs):
     training_loss.append(losses.avg)
 
     # # start validation
-    losses.reset()
-    model.train()
-    model.decoder.set_teacher_forcing_ratio(0)
-    for idx, (in_seq, tgt_seq, in_len, tgt_len) in enumerate(valid_dataloader):
-
-        with torch.no_grad():
-            output, attn_weights = model(in_seq, tgt_seq, in_len)
-                # print(attn_weights)
-            # print(in_seq)
-            print(output)
-                # print('!!!!!'+str(target))
-            loss = criterion(output, tgt_seq, tgt_len)
-
-        #  print training progress
-        del output
-        del attn_weights
-
-        losses.update(loss.item(), len(in_seq))
-        del loss
-
-        if idx % 5 == 0:
-            print('Validate Epoch:\t{} [{}/{}]\tLoss: {:.6f}'.format(
-                epoch + epoch_init, idx, len(valid_dataloader), losses.avg))
-
-    validate_loss.append(losses.avg)
+    # losses.reset()
+    # model.eval()
+    # for idx, (in_seq, tgt_seq, in_len, tgt_len) in enumerate(valid_dataloader):
+    #
+    #     with torch.no_grad():
+    #         output, attn_weights = model(in_seq, tgt_seq, in_len)
+    #             # print(attn_weights)
+    #         # print(in_seq)
+    #         # print(output)
+    #             # print('!!!!!'+str(target))
+    #         loss = criterion(output, tgt_seq, tgt_len)
+    #
+    #     #  print training progress
+    #     del output
+    #     del attn_weights
+    #
+    #     losses.update(loss.item(), len(in_seq))
+    #     del loss
+    #
+    #     if idx % 5 == 0:
+    #         print('Validate Epoch:\t{} [{}/{}]\tLoss: {:.6f}'.format(
+    #             epoch + epoch_init, idx, len(valid_dataloader), losses.avg))
+    #
+    # validate_loss.append(losses.avg)
 
     # save the best and last model checkpoints
     is_best = losses.avg < best_loss
@@ -241,12 +244,15 @@ for epoch in range(num_epochs):
         'model': model.state_dict(),
         'optim': optimizer.state_dict()
     }
+
     torch.save(save_state_dict,
-               model_save_folder + 'last_checkpoint_Seq2Seq_' + training_date)
-    if is_best:
-        torch.save(
-            save_state_dict,
-            model_save_folder + 'best_checkpoint_Seq2Seq_' + training_date)
+             model_save_folder + 'last_checkpoint_Seq2Seq_0315')
+    # torch.save(save_state_dict,
+    #            model_save_folder + 'last_checkpoint_Seq2Seq_' + training_date)
+    # if is_best:
+    #     torch.save(
+    #         save_state_dict,
+    #         model_save_folder + 'best_checkpoint_Seq2Seq_' + training_date)
 
 #%%
 # save the loss curve

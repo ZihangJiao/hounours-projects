@@ -6,29 +6,6 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from random import shuffle
 
-class TextMotionDataset(Dataset):
-    """Dataset class for baseline DCT model
-
-    input is [word_{t-1}, word_{t}, word_{t+1}]
-    target is DCT features, length of 20freq * 3dim
-    """
-    def __init__(self,data_path):
-        # load dataset in npz format
-        assert os.path.exists(data_path)
-        dataset = np.load(data_path, allow_pickle = True)
-
-        self.input = dataset['input']
-        self.target = dataset['target']
-
-        self.size = len(self.input)
-
-    def __getitem__(self, index):
-        return self.input[index], self.target[index]
-
-    def __len__(self):
-        return self.size
-
-
 def seq2seq_collate_fn(data: list, down_sample: int = 1, lookback: int = 4):
     """Dataset class for Seq2Seq model
 
@@ -49,7 +26,12 @@ def seq2seq_collate_fn(data: list, down_sample: int = 1, lookback: int = 4):
     # data has two columns, column 1st is input word, 2nd is target motion
     # print(data)
     in_seq = [torch.LongTensor(pair[0]) for pair in data]
-    target = [torch.Tensor(pair[1][::down_sample]) for pair in data]
+    # target = [torch.Tensor(pair[1][::down_sample]) for pair in data]
+    target = [torch.Tensor(pair[1]) for pair in data]
+    word_time_distribution = [torch.Tensor(pair[2]) for pair in data]
+    # print(len(target))
+    # print(len(target1))
+    # input()
     # for i in range(len(target)):
     #     print (len(target[i]))
 
@@ -60,10 +42,11 @@ def seq2seq_collate_fn(data: list, down_sample: int = 1, lookback: int = 4):
     # print(sort_order)
     in_seq = [seq for _, seq in temp_in_seq]
     target = [target[idx] for idx in sort_order] # target seq follow order of inputs
+    word_time_distribution = [word_time_distribution[idx] for idx in sort_order]
 
     # # use previous 'lookback' interval motions to predict the next motion
-    # # for i in range(len(in_seq)):
-    # #     print(len(in_seq[i]))
+    # for i in range(len(in_seq)):
+    #     print(len(in_seq[i]))
     # print(len(target[1]))
     # tgt_seq, new_target = [], []
     # for motion_seq in target:
@@ -78,7 +61,7 @@ def seq2seq_collate_fn(data: list, down_sample: int = 1, lookback: int = 4):
     #         new_target.append(torch.stack(temp_target))
     #         tgt_seq += temp_tgt_seq
     #         new_target += temp_target
-    #         # print(tgt_seq)
+            # print(tgt_seq)
     # # record length of each input for padding
     # # use 'Byte', 'Short' just to save some memory
 
@@ -91,13 +74,14 @@ def seq2seq_collate_fn(data: list, down_sample: int = 1, lookback: int = 4):
     # pad short sequences
     in_seq = pad_sequence(in_seq, batch_first=True)
     tgt_seq = pad_sequence(target, batch_first=True)
+    word_time_distribution = pad_sequence(word_time_distribution, batch_first = True)
     # print(len(tgt_seq[-1]))
     # new_target = pad_sequence(new_target, batch_first=True)
     # print(tgt_seq)
     # print(new_target)
     # raise RuntimeError('break')
     # print(in_seq)
-    return in_seq, tgt_seq, in_len, tgt_len
+    return in_seq, tgt_seq, word_time_distribution, in_len, tgt_len
 
 
 
@@ -165,13 +149,14 @@ class Seq2SeqDataset(Dataset):
         self.input = dataset['input']
         # print(self.input)
         self.target = dataset['target']
+        self.word_time_distribution = dataset['word_time_distribution']
         self.word2idx = word2idx
         self.idx2word = {v:k for k, v in word2idx.items()}
 
         self.size = len(self.input)
 
     def __getitem__(self, index):
-        return self.input[index], self.target[index]
+        return self.input[index], self.target[index], self.word_time_distribution[index]
 
     def __len__(self):
         return self.size

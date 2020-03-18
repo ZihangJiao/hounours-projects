@@ -4,60 +4,8 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence
 from torch.nn.utils.rnn import pad_packed_sequence
 from utils import weight_init_uniform
-
-class DCTModel(nn.Module):
-    """Baseline DCT model
-
-    Takes three words as input and outputs
-    the flatten DCT feature prediction (3 rotation DOF).
-
-    input shape: [batch_size, 3]
-    output shape: [batch_size, out_dim]
-
-    This is designed following Yu's model
-    """
-
-    def __init__(self,
-                 embed_dim,
-                 hidden_dim,
-                 out_dim,
-                 vocab_size,
-                 pretrain_weight=None):
-        super(DCTModel, self).__init__()
-
-        self.embed_dim = embed_dim
-        self.hidden_dim = hidden_dim
-        self.out_dim = out_dim
-        self.vocab_size = vocab_size
-
-        if pretrain_weight is None:
-            self.embedding = nn.Embedding(self.vocab_size, embed_dim)
-        else:
-            # use pretrained weight
-            self.embedding = nn.Embedding.from_pretrained(pretrain_weight)
-            # fine-tune here
-            self.embedding.weight.requires_grad = True
-
-        self.linear1 = nn.Linear(embed_dim * 3, hidden_dim)
-        self.relu = nn.ReLU(inplace=True)
-        self.linear2 = nn.Linear(hidden_dim, self.out_dim)
-        self.apply(GlorotUniform_init_fn)
-
-    def forward(self, x):
-        out = self.embedding(x).view(x.shape[0], -1)
-        out = self.linear1(out)
-        out = self.relu(out)
-        out = self.linear2(out)
-        return out
-
-
-def GlorotUniform_init_fn(layer):
-    # do xavier/glorot initialization on all linear weights
-    if type(layer) == nn.Linear:
-        # the gain can be modified here
-        torch.nn.init.xavier_uniform_(layer.weight, gain=2.**0.5)
-        layer.bias.data.fill_(0.)
-
+import numpy as np
+import math
 
 class Seq2SeqModel(nn.Module):
     """Our proposed Seq2Seq model
@@ -80,9 +28,9 @@ class Seq2SeqModel(nn.Module):
                  enc_layers=1,
                  dec_layers=1,
                  bidirectional=True,
-                 dropout_prob=0.25,
+                 dropout_prob=0,
                  pretrain_weight=None,
-                 teacher_forcing_ratio=0.5):
+                 look_back = 4):
 
         super(Seq2SeqModel, self).__init__()
         self.encoder = LSTMEncoder(embed_dim=embed_dim,
@@ -100,17 +48,130 @@ class Seq2SeqModel(nn.Module):
                                    dec_dim=dec_dim,
                                    out_dim_enc=out_dim_enc,
                                    dec_layers=dec_layers,
-                                   dropout_prob=dropout_prob,
-                                   teacher_forcing_ratio=teacher_forcing_ratio).to('cuda')
+                                   dropout_prob=dropout_prob)
+        self.dof = dof
+        self.lookback = look_back
+        self.enc_dim =enc_dim
+        self.enc_layers = enc_layers
+        self.vocab_size = vocab_size
+        self.embed_dim = embed_dim
+        self.bidirectional = bidirectional
+        if pretrain_weight is None:
+            self.embedding = nn.Embedding(self.vocab_size, self.embed_dim)
+        else:
+            # use pretrained weight
+            self.embedding = nn.Embedding.from_pretrained(pretrain_weight)
+            # no fine-tune
+            self.embedding.weight.requires_grad = True
 
-    def forward(self, in_seq, tgt_seq, lengths):
-        unpacked_out_enc, enc_mask = self.encoder(in_seq, lengths)
-        # print(unpacked_out_enc[0][0])
-        # print(enc_mask)
-        # print(unpacked_out_enc)
-        dec_outputs, attn_weights = self.decoder(tgt_seq, unpacked_out_enc,
-                                                 enc_mask)
-        return dec_outputs, attn_weights
+    def forward(self, in_seq, tgt_seq, word_time_distribution):
+
+        batch = len(word_time_distribution)
+        previous_outputs = torch.rand(batch,4,4)
+        # random initilise the previous output
+        # begining_word = in_seq[:,:3]
+        # get the first three word of input sentense, which is the
+        # start-of-sentense symbol, the first word amd the second word
+        device = torch.device('cuda')
+        embeddings = self.embedding(in_seq.cuda())
+        num_states = self.enc_layers * (2 if self.bidirectional else 1)
+        hidd_state = torch.empty(num_states, len(embeddings), self.enc_dim).cuda()
+        cell_state = torch.empty(num_states, len(embeddings), self.enc_dim).cuda()
+        nn.init.orthogonal_(hidd_state)
+        nn.init.orthogonal_(cell_state)
+        # print(in_seq[:,1:])
+        # print(in_seq[:,1:2])
+        # print(in_seq[:,2:3])
+        # print(word_time_distribution)
+        # print(sum(word_time_distribution[0]))
+
+        # print(dec_outputs.size())
+        # output = []
+        # for i in range(0,batch_size):
+        #     output.append(dec_outputs[i,:int(time_step[i]),:])
+        #     print(output)
+        #     input()
+
+
+
+
+        dec_outputs = torch.rand(batch,4,4)
+        for i in range(0, len(word_time_distribution[0])):
+            word = in_seq[:,i+1:i+2]
+            # print(word)
+            # input()
+            unpacked_out_enc, encoder_h, encoder_c = self.encoder(word, self.embedding, hidd_state, cell_state)
+            word_outputs , hidd, cell = self.decoder(tgt_seq, unpacked_out_enc,
+                                                     encoder_h, encoder_c,
+                                                     time_step = word_time_distribution[:,i],
+                                                     previous_out = previous_outputs)
+
+            # print(word_time_distribution[:,i])
+            # print(int(word_time_distribution[j,i]))
+            # print(word_outputs.size())
+            for j in range(0,batch):
+                # temp = word_outputs[j,:int(word_time_distribution[j,i]),:].clone()
+                # print(int(word_time_distribution[j,i]))
+
+                word_outputs[j,int(word_time_distribution[j,i]):,:] = 0
+                # print(previous_outputs.size())
+                # if(word_outputs)
+
+                if(int(word_time_distribution[j,i]) != 0):
+                    previous_outputs[j,:,:] = word_outputs[j,(int(word_time_distribution[j,i])-self.lookback) : int(word_time_distribution[j,i]),:]
+                else:
+                    previous_outputs[j,:,:] = torch.rand(1,self.lookback,4)
+                # print(previous_outputs.size())
+                # input()
+                # word_outputs[j,-int(word_time_distribution[j,i]):,:] = temp
+                # word_outputs[j,:-int(word_time_distribution[j,i]),:] = 0
+                # [i,:int(time_step[i]),:]
+            # print(word_outputs)
+            if i == 0:
+                # print(word_outputs.size())
+                dec_outputs = word_outputs
+            else:
+                dec_outputs = dec_outputs.to(device)
+                word_outputs = word_outputs.to(device)
+                dec_outputs = torch.cat((dec_outputs, word_outputs), 1)
+            # previous_outputs = dec_outputs[:,-self.lookback:,:]
+            # print(previous_outputs.size())
+            hidd_state = hidd
+            cell_state = cell
+        # for i in dec_outputs[5]:
+        #     print (i)
+        # print(dec_outputs[5])
+        # dec_outputs[:,:,:] = dec_outputs[:,:]
+        #
+        for i in range(batch):
+            A = dec_outputs[i]
+            B = A[A.sum(dim=1) != 0]
+            dec_outputs[i,:len(B),:] = B
+            dec_outputs[i,len(B):,:] = 0
+        return dec_outputs
+
+
+    def _init_state(self, encoder_hidden):
+        """ Initialize the encoder hidden state. """
+        if encoder_hidden is None:
+            return None
+        if isinstance(encoder_hidden, tuple):
+            encoder_hidden = tuple([self._cat_directions(h) for h in encoder_hidden])
+        else:
+            encoder_hidden = self._cat_directions(encoder_hidden)
+        return encoder_hidden
+
+    def _cat_directions(self, h):
+        """ If the encoder is bidirectional, do the following transformation.
+            (#directions * #layers, #batch, hidden_size) -> (#layers, #batch, #directions * hidden_size)
+        """
+        if self.bidirectional:
+            h = torch.cat([h[0:h.size(0):2], h[1:h.size(0):2]], 2)
+        return h
+        # print(dec_outputs.size())
+        # print(dec_outputs[:,-1,:].size())
+        # input()
+
 
 
 class LSTMEncoder(nn.Module):
@@ -124,7 +185,7 @@ class LSTMEncoder(nn.Module):
                  enc_dim,
                  enc_layers=1,
                  bidirectional=True,
-                 dropout_prob=0.25,
+                 dropout_prob=0,
                  pretrain_weight=None):
 
         super(LSTMEncoder, self).__init__()
@@ -136,68 +197,45 @@ class LSTMEncoder(nn.Module):
         self.bidirectional = bidirectional
         self.dropout_prob = dropout_prob
 
-        if pretrain_weight is None:
-            self.embedding = nn.Embedding(self.vocab_size, self.embed_dim)
-        else:
-            # use pretrained weight
-            self.embedding = nn.Embedding.from_pretrained(pretrain_weight)
-            # no fine-tune
-            self.embedding.weight.requires_grad = True
+        # if pretrain_weight is None:
+        #     self.embedding = nn.Embedding(self.vocab_size, self.embed_dim)
+        # else:
+        #     # use pretrained weight
+        #     self.embedding = nn.Embedding.from_pretrained(pretrain_weight)
+        #     # no fine-tune
+        #     self.embedding.weight.requires_grad = True
 
         self.lstm = nn.LSTM(
             input_size=self.embed_dim,
-            hidden_size=self.enc_dim,
+            hidden_size=self.enc_dim ,
             num_layers=self.enc_layers,
+
             batch_first=True,
             dropout=self.dropout_prob if self.enc_layers > 1 else 0.,
             bidirectional=self.bidirectional)
 
-    def forward(self, in_seq, lengths):
-        # used to mask zeroing-out padded positions in decoder
-        enc_mask = in_seq.eq(0)
+    # def forward(self, in_seq, hidden_state, cell_state):
+    def forward(self, in_seq, embedding, hidden_state, cell_state):
 
-        #### Embedding part
-        embeddings = self.embedding(in_seq.cuda())  # [batch, max_seq_len, embed_dim]
+        embeddings = embedding(in_seq.cuda())  # [batch, max_seq_len, embed_dim]
+        # print(embeddings.size())
+
         embeddings = F.dropout(embeddings,
                                p=self.dropout_prob,
                                training=self.training)
 
-        #### LSTM part
-        # initialization of hidden/cell states using Orthogonal Matrix
-        num_states = self.enc_layers * (2 if self.bidirectional else 1)
-        # print(num_states)
-        # print(len(embeddings))
-        # print(self.enc_dim)
-        h0 = torch.empty(num_states, len(embeddings), self.enc_dim).cuda()
-        c0 = torch.empty(num_states, len(embeddings), self.enc_dim).cuda()
-        nn.init.orthogonal_(h0)
-        nn.init.orthogonal_(c0)
+        if(hidden_state.size()[0] == 1 and self.bidirectional == True):
+            hidden_state = torch.cat((hidden_state[:,:,:self.enc_dim], hidden_state[:,:,self.enc_dim:]), 0)
+            cell_state = torch.cat((cell_state[:,:,:self.enc_dim], cell_state[:,:,self.enc_dim:]), 0)
+        # print(hidden_state.size())
 
-        # use 'pack' to accelerate LSTM mini-batch training
-        packed_embeddings = pack_padded_sequence(embeddings,
-                                                 lengths,
-                                                 batch_first=True)
-        del embeddings
+        # num_states = self.enc_layers * (2 if self.bidirectional else 1)
+        # hidden_state = torch.empty(num_states, len(embeddings), self.enc_dim).cuda()
+        # cell_state = torch.empty(num_states, len(embeddings), self.enc_dim).cuda()
 
-        packed_out_enc, (hidd_stat_enc,
-                         cell_stat_enc) = self.lstm(packed_embeddings,
-                                                    (h0, c0))
-        del h0
-        del c0
-        del packed_embeddings
+        output, (hidden, cell) = self.lstm(embeddings, (hidden_state, cell_state))
 
-        unpacked_out_enc, lengths_enc = pad_packed_sequence(packed_out_enc,
-                                                            batch_first=True)
-
-        del packed_out_enc
-
-        unpacked_out_enc = F.dropout(unpacked_out_enc,
-                                     p=self.dropout_prob,
-                                     training=self.training)
-
-        # unpacked_out_enc shape [batch_size, max_seq_len, enc_dim]
-        # enc_mask shape [batch_size, max_seq_len]
-        return unpacked_out_enc, enc_mask
+        return output, hidden, cell
 
 
 class AttentionLayer(nn.Module):
@@ -243,8 +281,11 @@ class AttentionLayer(nn.Module):
         # 'general' scoring: $h_t^{T} W h_{enc}$
         projected_encoder_out = \
             self.src_projection(encoder_out).transpose(2, 1)
+        # print(projected_encoder_out.size())
         attn_scores = \
             torch.bmm(tgt_input.unsqueeze(dim=1), projected_encoder_out)
+        # print(projected_encoder_out)
+        # print(attn_scores)
 
         return attn_scores
 
@@ -261,8 +302,8 @@ class LSTMDecoder(nn.Module):
                  dec_dim=64,
                  out_dim_enc=64,
                  dec_layers=1,
-                 dropout_prob=0.25,
-                 teacher_forcing_ratio=0.5):
+                 dropout_prob=0,
+                 bidirectional_encoder=True):
         super(LSTMDecoder, self).__init__()
 
         self.dof = dof
@@ -271,161 +312,216 @@ class LSTMDecoder(nn.Module):
         self.dec_layers = dec_layers
         self.dropout_prob = dropout_prob
         self.out_dim_enc = out_dim_enc
-        self.teacher_forcing_ratio = teacher_forcing_ratio
+        self.bidirectional_encoder = bidirectional_encoder
         self.lookback = 4
 
         self.lstm = nn.ModuleList([
-            nn.LSTMCell(input_size= \
-                                self.dec_dim + self.dof
-                                if layer == 0 else self.dec_dim,
-                        hidden_size=self.dec_dim)
+            nn.LSTMCell(input_size=  self.dof * self.lookback + self.dec_dim*2 if bidirectional_encoder else self.dof * self.lookback + self.dec_dim,
+                                # self.dec_dim*2 + self.lookback * self.dof if bidirectional_encoder else self.dof * self.lookback + self.dec_dim,
+                                # if layer == 0 else self.dec_dim,
+                        hidden_size=self.dec_dim*2 if bidirectional_encoder else self.dec_dim)
             for layer in range(self.dec_layers)
         ]).cuda()
 
-        self.attn = AttentionLayer(self.out_dim_enc, self.dec_dim)
-        self.final_projection = nn.Linear(self.dec_dim, self.dof)
+        self.attn = AttentionLayer(self.out_dim_enc, self.dec_dim*2 if bidirectional_encoder else self.dec_dim)
+        self.final_projection = nn.Linear(self.dec_dim*2 if bidirectional_encoder else self.dec_dim, self.dof)
 
-    def forward(self, tgt_seq, unpacked_out_enc, enc_mask):
-        # tgt_seq shape [batch_size, max_seq_len_dec, lookback_len, num_dof]
-        # unpacked_out_enc shape [batch_size, max_seq_len_enc, out_dim_enc]
-        # enc_mask shape [batch_size, max_seq_len_end]
-
+    def forward(self,tgt_seq,unpacked_out_enc,hidd_stat_enc,cell_stat_enc,time_step,previous_out):
+        device = torch.device('cuda')
         assert self.dof == tgt_seq.shape[-1]
         batch_size, time_step_dec = tgt_seq.shape[0], tgt_seq.shape[1]
-        # # flatten the last two dimensions
-        # print(tgt_seq)
-        # print(tgt_seq.size())
-        # print(tgt_seq[0][0])
 
-        # tgt_seq = tgt_seq.view(batch_size, time_step_dec, -1)
-        # print(tgt_seq[0][0])
-        # print(tgt_seq.size())
-        # print('!!!!!!'+str(tgt_seq))
+        tgt_seq = tgt_seq.view(batch_size, time_step_dec, -1)
+        input_feed = tgt_seq.data.new(batch_size, self.dec_dim*2 if self.bidirectional_encoder else self.dec_dim).zero_().cuda()
 
+        hidd_stat_dec = self._init_state(hidd_stat_enc)
+        cell_stat_dec = self._init_state(cell_stat_enc)
 
-        # determine traing method
-        use_teacher_forcing = True if (
-            torch.rand(1).item() < self.teacher_forcing_ratio) else False
+        # hidd_stat_dec = hidd_stat_enc
+        # cell_stat_dec = cell_stat_enc
 
-        #### Initialization part
-        # creat the lstm input feed and hidden/cell states of (t = -1) step
-        input_feed = tgt_seq.data.new(batch_size, self.dec_dim).zero_().cuda()
-        # print(input_feed.size())
-        hidd_stat_dec = [
-            torch.zeros(batch_size, self.dec_dim).cuda()
-            for i in range(self.dec_layers)
-        ]
-
-
-
-        cell_stat_dec = [
-            torch.zeros(batch_size, self.dec_dim).cuda()
-            for i in range(self.dec_layers)
-        ]
-
-        # Orthogonal initialization
-        # print(input_feed)
-        weight_init_uniform(input_feed)
-        # print(input_feed)
+        nn.init.orthogonal_(input_feed)
         for i in range(self.dec_layers):
             nn.init.orthogonal_(hidd_stat_dec[i])
             nn.init.orthogonal_(cell_stat_dec[i])
-
-        # initialize attention and output node
-        attn_weights = tgt_seq.data.new(batch_size, time_step_dec,
-                                        enc_mask.shape[1]).zero_()
-        dec_outputs = tgt_seq.data.new(batch_size, time_step_dec,
+        # print(previous_out.size())
+        dec_outputs = tgt_seq.data.new(batch_size, 1,
                                        self.dof).zero_()
+        # print(dec_outputs)
 
-        #### LSTM part
-        for t in range(time_step_dec):
-            # input_feed = input_feed.detach()
-            # if use_teacher_forcing or t < self.lookback:
-            #     # concatenate correct previous motion and
-            #     # attentional hidden states of the lastraise RuntimeError('break') time step
-            # # print('!!!!!'+str(target))
-            #     # print(tgt_seq[:, t, :])
-            #     # print(input_feed.cuda()[0])
-            #     print(tgt_seq.size())
-            #     print(input_feed)
-            # print(len(tgt_seq[:, t, :][0]))
-            mean = tgt_seq[:,t,:].mean()
-            std = tgt_seq[:,t,:].std()
-            normalised_tgt = tgt_seq.data.new(tgt_seq.size()).zero_().cuda()
+        # decoder_input = unpacked_out_enc[:,0].squeeze(1)
+        # print(previous_out.size())
+        previous_out = previous_out.contiguous().view(batch_size,-1)
+        temp_input = previous_out
+        for t in range(int(max(time_step))):
+            # if(t == 0):
+            #     if self.bidirectional_encoder == True:
+            #         temp_input = previous_out.to(device)
+            #         # print(hidd_stat_enc.size())
+            #         # print(temp_input.size())
+            #         temp_input = torch.cat([temp_input, hidd_stat_enc[0]],dim = 1)
+            #         temp_input = torch.cat([temp_input, hidd_stat_enc[1]],dim = 1)
+            #     else:
+            #         temp_input = previous_out.to(device)
+            #         temp_input = torch.cat([temp_input, hidd_stat_enc[0]],dim = 1)
+            #
+            # else:
 
-            normalised_tgt[:,t,:] = (tgt_seq[:,t,:] - tgt_seq[:,t,:].mean())/tgt_seq[:,t,:].std()
-            lstm_input = torch.cat([normalised_tgt[:, t, :].cuda(), input_feed.cuda()], dim=-1).cuda()
-
-            # print(lstm_input.size())
-            previous_out = dec_outputs[:, t, :].detach().cuda()
+            previous_out = dec_outputs[:, t-1, :].detach().cuda()
             previous_out = previous_out.view(batch_size, -1).cuda()
-            lstm_input = torch.cat([previous_out, input_feed], dim=-1).cuda()
-            # print(len(lstm_input[1]))
-            # Pass tgt_seq input through each layer(s) and
-            # update hidden/cell states
-            # print(self.lstm)
+            temp_input = temp_input.to(device)
+            tgt_seqtemp = tgt_seq
+            tgt_seqtemp = tgt_seqtemp.to(device)
+            temp_input = torch.cat([temp_input[:,self.dof:self.dof * self.lookback], previous_out],dim = 1)
+            # print(temp_input.size())
+            # print(unpacked_out_enc[:,0,:].size())
+            temp_input = torch.cat([temp_input, unpacked_out_enc[:,0,:]],dim = 1)
+            # if self.bidirectional_encoder == True:
+            #     temp_input = torch.cat([temp_input, hidd_stat_enc[0]],dim = 1)
+            #     temp_input = torch.cat([temp_input, hidd_stat_enc[1]],dim = 1)
+            # else:
+            #     temp_input = torch.cat([temp_input, hidd_stat_enc[0]],dim = 1)
+
+
+
+            del previous_out
+            lstm_input = temp_input
+
+            del input_feed
+
+            hidd_stat_dec_temp = torch.zeros(self.dec_layers,batch_size,self.dec_dim * 2 if self.bidirectional_encoder else self.dec_dim).cuda()
+            cell_stat_dec_temp = torch.zeros(self.dec_layers,batch_size,self.dec_dim * 2 if self.bidirectional_encoder else self.dec_dim).cuda()
+
             for idx, layer in enumerate(self.lstm):
+                # print(layer)
                 layer = layer.cuda()
                 # print(lstm_input.size())
-
-                hidd_stat_dec[idx], cell_stat_dec[idx] = layer(
+                # print(lstm_input.size())
+                # print("input")
+                # print(lstm_input.size())
+                # print(lstm_input.size())
+                # print(hidd_stat_dec.size())
+                a,b = layer(
                     lstm_input, (hidd_stat_dec[idx], cell_stat_dec[idx]))
-
+                # print('a')
+                # print(a.size())
+                # print("a:")
+                # print(a.size())
+                # hidd_stat_dec[idx] = a
+                # cell_stat_dec[idx] = b
+                # del a
+                # del b
                 # add dropout layer after each lstm layer
-                lstm_input = F.dropout(hidd_stat_dec[idx],
+                lstm_input = F.dropout(a,
                                        p=self.dropout_prob,
                                        training=self.training)
-
+                # print(lstm_input.size())
+                hidd_stat_dec_temp[idx] = a
+                cell_stat_dec_temp[idx] = b
+                del a
+                del b
             #### Attention part, apply attention to lstm output
-            input_feed, step_attn_weight = self.attn(hidd_stat_dec[-1],
-                                                     unpacked_out_enc,
-                                                     enc_mask.cuda())
-
+            # print(hidd_stat_dec[-1].size())
+            # print(unpacked_out_enc.size())
+            # print(enc_mask.size())
+            # if(t == 20):
+            #     print(hidd_stat_dec_temp)
+            #     print(hidd_stat_dec)
+            hidd_stat_dec = hidd_stat_dec_temp
+            cell_stat_dec = cell_stat_dec_temp
+            del hidd_stat_dec_temp
+            del cell_stat_dec_temp
+            # print(hidd_stat_dec)
+            # input_feed, step_attn_weight = self.attn(hidd_stat_dec[-1],
+            #                                          unpacked_out_enc,
+            #                                          enc_mask.cuda())
+            # print(input_feed)
+            # print(hidd_stat_dec[0])
+            input_feed = hidd_stat_dec[-1]
+            # step_attn_weight = tgt_seq.data.new(batch_size, 1,
+            #                                 enc_mask.shape[1]).zero_()
+            # print(step_attn_weight)
             # get the final output of attention layer of one time step
             input_feed = F.dropout(input_feed,
                                    p=self.dropout_prob,
                                    training=self.training).cuda()
-
             # final projection
-
+            # print(input_feed.size())
             step_output = self.final_projection(input_feed)
+            # step_output = input_feed
+            # print('TEST')
+            # print(input_feed)
             # print(step_output)
-            attn_weights[:, t, :] = step_attn_weight
-            # print(attn_weights)
-            # print(dec_outputs)
-            # print(step_output.size())
-            step_output = step_output * std + mean
+            # input()
+
+            # if t != 1:
+            #     attn_weights = torch.cat((attn_weights, tgt_seq.data.new(batch_size, 1, enc_mask.shape[1]).zero_()),1)
+            # attn_weights[:, t, :] = step_attn_weight
+            # del step_attn_weight
+
+
+            # step_output = step_output * std + mean
+
+            # if t == 0:
+            #     dec_outputs = torch.cat((dec_outputs, tgt_seq.data.new(batch_size, 1, self.dof).zero_()),1)
+            #     dec_outputs[:, t, :] = temp_input[:,self.dof * (self.lookback -1):self.dof * self.lookback]
+            # elif t == 1:
+            #     dec_outputs[:, t, :] = step_output
+            # else:
+            #     dec_outputs = torch.cat((dec_outputs, tgt_seq.data.new(batch_size, 1, self.dof).zero_()),1)
+            #     dec_outputs[:, t, :] = step_output
+            # # print(step_output)
+            # # input()
+            # del step_output
+            # step_output = step_output * std + mean
+
+            if t != 1:
+                dec_outputs = torch.cat((dec_outputs, tgt_seq.data.new(batch_size, 1, self.dof).zero_()),1)
             dec_outputs[:, t, :] = step_output
-            # print(dec_outputs)
-            # print(dec_outputs.size())
+            # print(step_output)
+            del step_output
 
-            # print(dec_outputs.size())
-            # raise RuntimeError('break')
-            # print(attn_weights)
+            # print(step_output.size())
+            # for i in step_output:
+            #     counter = 0
+            #     print(i[0].cpu().numpy()[0])
+            #     x = torch.tensor(0.0051).cuda()
+            #     print(x)
+            #     print(torch.equal(i[0],x))
+            #     if i == np.array(1.0,1.0,1.0,1.0):
+            #         lengths[counter] = t
+            #     counter += 1
 
 
-
-        # dof_123 = torch.tanh(dec_outputs[:, :, :-1])
-        # dof_4 = torch.relu(dec_outputs[:, :, -1]).unsqueeze(-1)
-
-
-        # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!' + str(dec_outputs))
-        # raise RuntimeError('break')
-        # print(dec_outputs)
-        outputs = torch.tanh(dec_outputs)
-        # print('!!!!!!!!!!!!!!'+ str(outputs))
-
+        outputs = dec_outputs
+        # print(outputs[:,0,:])
         # print(outputs)
-        # outputs = torch.cat([dof_123, dof_4], dim=-1)
+        # input()
 
-        # output shape [batch_size, max_seq_len_dec, num_dof]
-        # attn_weights [batch_size, max_seq_len_dec, max_seq_len_enc]
-        # print(outputs)
-        return outputs, attn_weights
+        # return outputs
+        # print(hidd_stat_dec)
+        return outputs, hidd_stat_dec, cell_stat_dec
 
-    def set_teacher_forcing_ratio(self, ratio: float):
-        assert 0 <= ratio <= 1
-        self.teacher_forcing_ratio = ratio
+    # def set_teacher_forcing_ratio(self, ratio: float):
+    #     assert 0 <= ratio <= 1
+    #     self.teacher_forcing_ratio = ratio
+    def _init_state(self, encoder_hidden):
+        """ Initialize the encoder hidden state. """
+        if encoder_hidden is None:
+            return None
+        if isinstance(encoder_hidden, tuple):
+            encoder_hidden = tuple([self._cat_directions(h) for h in encoder_hidden])
+        else:
+            encoder_hidden = self._cat_directions(encoder_hidden)
+        return encoder_hidden
+
+    def _cat_directions(self, h):
+        """ If the encoder is bidirectional, do the following transformation.
+            (#directions * #layers, #batch, hidden_size) -> (#layers, #batch, #directions * hidden_size)
+        """
+        if self.bidirectional_encoder:
+            h = torch.cat([h[0:h.size(0):2], h[1:h.size(0):2]], 2)
+        return h
 
 
 class nopad_mse_loss(nn.Module):
@@ -453,16 +549,25 @@ class nopad_mse_loss(nn.Module):
     def forward(self, output, target, seq_length, keep_dof=False):
         # output/target shape [batch_size, max_seq_len_dec, num_dof]
         # seq_length shape [batch_size]
-
+        # print(output)
+        # print(target)
+        # print(seq_length)
         assert len(output) == len(target) == len(seq_length)
 
         error_list = []
         for i, length in enumerate(seq_length):
-            length = length.item()
-            err = output[i, :length] - target[i, :length]
+            # length = length.item()
+            # print(output[i,:length])
+            err = output[i, :length].cuda() - target[i, :length].cuda()
+            # print(len(output[0]))
+            # print(len(target[0]))
             err = self.calc_fn(torch.pow(err, 2), dim=0)
+            # print(err)
             error_list.append(err)
         loss = self.calc_fn(torch.stack(error_list), dim=0)
+        # print(output)
+        # print(target)
+        # print(loss)
 
         # loss shape [1] or [num_dof](keep_dof)
         return loss if keep_dof else self.calc_fn(loss)

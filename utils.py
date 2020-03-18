@@ -210,6 +210,7 @@ def token_regularizer(word: str) -> list:
         else:
             # most case (not in dict) is possessive
             # just discard /'s/
+
             return [word[:word.rfind("'")]]
     elif '-' in word:
         return [word.strip("-")]
@@ -346,6 +347,18 @@ contractions_dict = {
     "you're": "you are",
     "you've": "you have"
 }
+def word_split_rule(phon_list):
+    all_time_distribution = []
+    for i in phon_list:
+        temp_time = 0
+        for k in i.split():
+            start = k[0]
+            if (start == 'A' or start == 'E' or start == 'I' or start == 'O' or start == 'U'):
+                temp_time += 0.8
+            else:
+                temp_time += 0.1
+        all_time_distribution.append(temp_time)
+    return(all_time_distribution)
 
 
 def weight_init_uniform(m):
