@@ -1,5 +1,5 @@
 # Text-driven Head Motion Synthesis 
-### 2019 MSc project
+### 2020 honours project
 
 This is a document for the program of this project. Most files have been well commented, described and orgainized.
 
@@ -27,4 +27,4 @@ The synthesised animation and survey webpage are in folder `subj_eval_case`. The
 You can contact me by email: mrcjava@gmail.com
 Good luck!
 
-Jiahua Chu, Aug 2019
+ZihangJiao May 2020
