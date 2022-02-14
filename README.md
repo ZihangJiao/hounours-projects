@@ -24,7 +24,7 @@ Besides, there are two folders `glove` and `Recordings_October_2014` is not incl
 The synthesised animation and survey webpage are in folder `subj_eval_case`. The webpage is made by very simple HTML. By swap \<video> labels, you can shuffle the order of test cases, which must not been seen by participants. 
 
 ---
-You can contact me by email: mrcjava@gmail.com
+You can contact me by email: j652350094@gmail.com
 Good luck!
 
 ZihangJiao May 2020
